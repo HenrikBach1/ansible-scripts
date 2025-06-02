@@ -1,0 +1,15 @@
+# file=add-to-docker.yml
+# This playbook adds the current user to the Docker group and informs the user to re-login.
+---
+- hosts: localhost
+  become: true
+  tasks:
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ lookup('env','USER') }}"
+        groups: docker
+        append: yes
+
+    - name: Inform user to re-login for group changes
+      debug:
+        msg: "You must log out and log back in (or restart your session) for Docker group membership to take effect."
