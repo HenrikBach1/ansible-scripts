@@ -1,4 +1,4 @@
-# file=add-to-docker.yml
+# file=add-user-to-docker.yml
 # This playbook adds the current user to the Docker group and informs the user to re-login.
 ---
 - hosts: localhost

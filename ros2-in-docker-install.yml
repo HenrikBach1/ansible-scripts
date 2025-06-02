@@ -1,0 +1,264 @@
+# file=ros2-in-docker-install.yml
+---
+# Import docker installation playbook
+- import_playbook: docker-install.yml
+
+- name: Setup ROS2 Docker Environment
+  hosts: localhost
+  become: true
+  vars:
+    # ROS2 LTS releases - Set to the desired LTS version
+    # 'humble' is LTS until May 2027
+    # 'iron' is LTS until May 2028
+    # 'jazzy' is LTS until May 2029
+    ros2_distro: jazzy
+    # Set to false to enforce LTS versions only
+    allow_non_lts: false
+    # LTS releases list - used to validate distribution if allow_non_lts is false
+    ros2_lts_releases:
+      - humble
+      - iron
+      - jazzy
+    # Only keep the selected distro, remove others (even if they are LTS)
+    keep_only_selected_distro: true
+    docker_image_name: "ros2_workspace"
+    use_prebuilt_image: true
+    additional_tools:
+      - python3-pip
+      - python3-colcon-common-extensions
+      - git
+      - build-essential
+      - cmake
+      - vim
+      - nano
+    workspace_dir: "/home/{{ lookup('env','USER') }}/ros2_ws"
+
+  tasks:
+    # Validate that the selected ROS2 distribution is an LTS release
+    - name: Validate ROS2 distribution is LTS
+      fail:
+        msg: "The selected ROS2 distribution '{{ ros2_distro }}' is not an LTS release. Please choose from: {{ ros2_lts_releases | join(', ') }} or set allow_non_lts to true."
+      when: not allow_non_lts | bool and ros2_distro not in ros2_lts_releases
+
+    # Identify and remove non-LTS ROS2 Docker images
+    - name: Get list of Docker images
+      command: docker images osrf/ros --format "{% raw %}{{.Tag}}{% endraw %}"
+      register: docker_images
+      changed_when: false
+      become: false
+      failed_when: false
+      
+    - name: Get list of Docker images with sudo (fallback)
+      command: sudo docker images osrf/ros --format "{% raw %}{{.Tag}}{% endraw %}"
+      register: docker_images_sudo
+      changed_when: false
+      when: docker_images.rc != 0
+      failed_when: false
+      
+    - name: Parse Docker image tags
+      set_fact:
+        ros_image_tags: "{{ docker_images.stdout_lines | select('match', '.*-desktop') | map('regex_replace', '-desktop$', '') | list }}"
+      when: docker_images.rc == 0
+      
+    - name: Parse Docker image tags (sudo)
+      set_fact:
+        ros_image_tags: "{{ docker_images_sudo.stdout_lines | select('match', '.*-desktop') | map('regex_replace', '-desktop$', '') | list }}"
+      when: docker_images.rc != 0 and docker_images_sudo.rc == 0
+      
+    - name: Debug image tags
+      debug:
+        msg: 
+          - "All ROS image tags: {{ ros_image_tags | default([]) }}"
+          - "Non-LTS images to remove: {{ ros_image_tags | default([]) | difference(ros2_lts_releases) }}"
+          - "Other LTS images to remove: {{ ros_image_tags | default([]) | difference([ros2_distro]) | intersect(ros2_lts_releases) }}"
+          - "Docker command return code: {{ docker_images.rc }}"
+          - "Docker sudo command return code: {{ docker_images_sudo.rc | default('Not executed') }}"
+      when: (docker_images.rc == 0) or (docker_images_sudo.rc == 0)
+      
+    - name: Remove non-LTS ROS2 Docker images
+      community.docker.docker_image:
+        name: "osrf/ros:{{ item }}-desktop"
+        state: absent
+        force_absent: true
+      loop: "{{ ros_image_tags | difference(ros2_lts_releases) }}"
+      when: not allow_non_lts | bool and docker_images.rc == 0
+      become: false
+      register: image_removal
+      ignore_errors: true
+      
+    - name: Remove other LTS ROS2 Docker images (when keeping only selected distro)
+      community.docker.docker_image:
+        name: "osrf/ros:{{ item }}-desktop"
+        state: absent
+        force_absent: true
+      loop: "{{ ros_image_tags | difference([ros2_distro]) | intersect(ros2_lts_releases) }}"
+      when: keep_only_selected_distro | bool and docker_images.rc == 0
+      become: false
+      register: lts_image_removal
+      ignore_errors: true
+      
+    - name: Remove non-LTS ROS2 Docker images with sudo (fallback)
+      community.docker.docker_image:
+        name: "osrf/ros:{{ item }}-desktop"
+        state: absent
+        force_absent: true
+      loop: "{{ ros_image_tags | difference(ros2_lts_releases) }}"
+      when: not allow_non_lts | bool and ((docker_images.rc == 0 and image_removal is failed) or (docker_images.rc != 0 and docker_images_sudo.rc == 0))
+      become: true
+      register: sudo_image_removal
+      ignore_errors: true
+      
+    - name: Force remove non-LTS ROS2 Docker images using docker CLI (last resort)
+      command: "sudo docker rmi -f osrf/ros:{{ item }}-desktop"
+      loop: "{{ ros_image_tags | difference(ros2_lts_releases) }}"
+      when: not allow_non_lts | bool and ((docker_images.rc == 0 or docker_images_sudo.rc == 0) and sudo_image_removal is failed)
+      ignore_errors: true
+      
+    - name: Remove other LTS ROS2 Docker images with sudo (fallback)
+      community.docker.docker_image:
+        name: "osrf/ros:{{ item }}-desktop"
+        state: absent
+        force_absent: true
+      loop: "{{ ros_image_tags | difference([ros2_distro]) | intersect(ros2_lts_releases) }}"
+      when: keep_only_selected_distro | bool and ((docker_images.rc == 0 and lts_image_removal is failed) or (docker_images.rc != 0 and docker_images_sudo.rc == 0))
+      become: true
+      register: sudo_lts_image_removal
+      ignore_errors: true
+      
+    - name: Force remove other LTS ROS2 Docker images using docker CLI (last resort)
+      command: "sudo docker rmi -f osrf/ros:{{ item }}-desktop"
+      loop: "{{ ros_image_tags | difference([ros2_distro]) | intersect(ros2_lts_releases) }}"
+      when: keep_only_selected_distro | bool and ((docker_images.rc == 0 or docker_images_sudo.rc == 0) and sudo_lts_image_removal is failed)
+      ignore_errors: true
+
+    # This step ensures Docker permissions are properly applied
+    - name: Apply docker group permissions immediately (for this session only)
+      shell: newgrp docker << EOF
+             exit
+             EOF
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Create ROS2 workspace directory
+      file:
+        path: "{{ workspace_dir }}"
+        state: directory
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+
+    - name: Pull pre-built ROS2 Docker image
+      community.docker.docker_image:
+        name: "osrf/ros:{{ ros2_distro }}-desktop"
+        source: pull
+      become: false
+      when: use_prebuilt_image | bool
+      register: docker_pull_result
+      ignore_errors: true
+      
+    - name: Pull pre-built ROS2 Docker image with sudo (fallback)
+      community.docker.docker_image:
+        name: "osrf/ros:{{ ros2_distro }}-desktop"
+        source: pull
+      become: true
+      when: use_prebuilt_image | bool and docker_pull_result is failed
+
+    - name: Create Dockerfile for custom ROS2 image
+      copy:
+        dest: "{{ workspace_dir }}/Dockerfile"
+        content: |
+          FROM osrf/ros:{{ ros2_distro }}-desktop
+          
+          # Set non-interactive mode for apt
+          ENV DEBIAN_FRONTEND=noninteractive
+          
+          # Install additional packages
+          RUN apt-get update && apt-get install -y \
+              {{ additional_tools | join(' \\\n              ') }} \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Create a non-root user with the same ID as the host user
+          RUN groupadd -g $(id -g) $(id -u -n) && \
+              useradd -u $(id -u) -g $(id -g) -m $(id -u -n)
+          
+          # Set up entrypoint
+          COPY entrypoint.sh /entrypoint.sh
+          RUN chmod +x /entrypoint.sh
+          
+          # Switch to the non-root user
+          USER $(id -u -n)
+          
+          # Create workspace
+          RUN mkdir -p /home/$(id -u -n)/ros2_ws/src
+          WORKDIR /home/$(id -u -n)/ros2_ws
+          
+          ENTRYPOINT ["/entrypoint.sh"]
+          CMD ["bash"]
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0644'
+      when: not use_prebuilt_image | bool
+
+    - name: Create entrypoint script
+      copy:
+        dest: "{{ workspace_dir }}/entrypoint.sh"
+        content: |
+          #!/bin/bash
+          set -e
+          
+          # Source ROS2 environment
+          source /opt/ros/{{ ros2_distro }}/setup.bash
+          
+          # Execute command passed to the container
+          exec "$@"
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+      when: not use_prebuilt_image | bool
+
+    - name: Build custom ROS2 Docker image
+      community.docker.docker_image:
+        name: "{{ docker_image_name }}:{{ ros2_distro }}"
+        build:
+          path: "{{ workspace_dir }}"
+          pull: yes
+        source: build
+      become: false
+      when: not use_prebuilt_image | bool
+
+    - name: Create convenience script to run ROS2 container
+      copy:
+        dest: "{{ workspace_dir }}/run_ros2_docker.sh"
+        content: |
+          #!/bin/bash
+          
+          # Select the appropriate image based on configuration
+          IMAGE_NAME="{{ docker_image_name if not use_prebuilt_image else 'osrf/ros' }}:{{ ros2_distro }}{{ '-desktop' if use_prebuilt_image else '' }}"
+          
+          # Run the container with appropriate mounts
+          docker run -it --rm \
+            --network=host \
+            --privileged \
+            -v "{{ workspace_dir }}:/home/{{ lookup('env','USER') }}/ros2_ws" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -e DISPLAY \
+            -e QT_X11_NO_MITSHM=1 \
+            -e XAUTHORITY=$XAUTHORITY \
+            --name ros2_container \
+            $IMAGE_NAME
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+
+    - name: Display completion message
+      debug:
+        msg: |
+          ROS2 Docker setup complete!
+          
+          ROS2 Distribution: {{ ros2_distro }} {{ "(LTS)" if ros2_distro in ros2_lts_releases else "(non-LTS)" }}
+          
+          To run the ROS2 container:
+          $ cd {{ workspace_dir }}
+          $ ./run_ros2_docker.sh
+          
+          Note: You may need to log out and log back in for group changes to take effect.

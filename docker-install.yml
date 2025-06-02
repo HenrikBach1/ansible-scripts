@@ -1,4 +1,4 @@
-# file=ansible-docker-install.yml
+# file=docker-install.yml
 # This playbook installs Docker on an Ubuntu system, configures it, and tests the installation.
 
 ---
