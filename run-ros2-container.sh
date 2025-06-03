@@ -9,7 +9,7 @@ CONTAINER_NAME="ros2_container"
 WORKSPACE_DIR="$HOME/projects"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
-PERSISTENT=true # Keep the container after exit - This should become the default behavior
+PERSISTENT=true # Keep the container after exit - Copilot: This should become the default behavior
 RUN_AS_ROOT=false
 DETACH_MODE=false
 AUTO_ATTACH=true
@@ -137,7 +137,7 @@ IMAGE_NAME="osrf/ros:${ROS2_DISTRO}-desktop"
 # Check if Ansible (for automation) and Terminator (for terminal management) are installed, if not install them..
 if (! command -v ansible &> /dev/null) \
     || (! command -v terminator &> /dev/null) \
-    || (! command -v lxc &> /dev/null) \
+    || (! command -v lxc-attach &> /dev/null) \
     ; then
     echo "Required tools not found. Installing tools..."
     sudo apt update && sudo apt upgrade -y
@@ -391,12 +391,6 @@ else
     else
         echo "Container session ended"
     fi
-fi
-
-# Remove the duplicate container status check that was causing double messages
-# (This block was redundant with the previous if-else block)
-else
-    echo "Container session ended"
 fi
 
 # Show additional container management information
