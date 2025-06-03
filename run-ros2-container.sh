@@ -133,17 +133,25 @@ fi
 # Set the Docker image name
 IMAGE_NAME="osrf/ros:${ROS2_DISTRO}-desktop"
 
-# Check if Ansible is installed, if not install it
-if ! command -v ansible &> /dev/null; then
-    echo "Ansible not found. Installing Ansible..."
-    sudo apt update
-    sudo apt install -y ansible
+# Outside of the container
+# Check if Ansible (for automation) and Terminator (for terminal management) are installed, if not install them..
+if (! command -v ansible &> /dev/null) \
+    || (! command -v terminator &> /dev/null) \
+    || (! command -v lxc &> /dev/null) \
+    ; then
+    echo "Required tools not found. Installing tools..."
+    sudo apt update && sudo apt upgrade -y
+    sudo apt install -y ansible terminator lxc 
     
-    if ! command -v ansible &> /dev/null; then
-        echo "Failed to install Ansible. Please install it manually."
+    if (! command -v ansible &> /dev/null) \
+        || (! command -v terminator &> /dev/null) \
+        || (! command -v lxc-attach &> /dev/null) \
+        ; then
+        echo "Required tools not found. Install tools:"
+        echo "sudo apt install -y ansible terminator lxc"
         exit 1
     fi
-    echo "Ansible installed successfully."
+    echo "Tools installed successfully."
 fi
 
 # Check if the Docker image exists
@@ -200,6 +208,8 @@ fi
 echo "Starting ROS2 $ROS2_DISTRO container with X11 forwarding..."
 echo "Workspace directory: $WORKSPACE_DIR"
 echo "Note: You can safely ignore the 'groups: cannot find name for group ID' warning."
+
+xhost +local:root
 
 # Check if container already exists
 CONTAINER_EXISTS=$(sudo docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
