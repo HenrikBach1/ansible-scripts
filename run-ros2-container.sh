@@ -14,6 +14,7 @@ RUN_AS_ROOT=false
 DETACH_MODE=false
 AUTO_ATTACH=true
 CLEAN_START=false
+VSCODE_READY=true  # Ensure container is ready for VS Code Remote Development
 
 # Display help message
 show_help() {
@@ -31,6 +32,7 @@ show_help() {
     echo "  -D, --detach           Run container in detached mode"
     echo "  -n, --no-attach        Don't automatically attach to detached containers"
     echo "  --clean                Stop and remove existing container before starting"
+    echo "  --no-vscode            Disable VS Code Remote Development optimizations"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
@@ -112,6 +114,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clean)
             CLEAN_START=true
+            shift
+            ;;
+        --no-vscode)
+            VSCODE_READY=false
             shift
             ;;
         -h|--help)
@@ -320,9 +326,12 @@ else
         -v "$WORKSPACE_DIR:/workspace:rw" \
         -v "$WORKSPACE_DIR:/projects:rw" \
         -v "$(dirname "$(readlink -f "$0")")/run-ros2-container-entrypoint.sh:/entrypoint.sh:ro" \
+        -v /var/run/docker.sock:/var/run/docker.sock:ro \
         -e DISPLAY=$DISPLAY \
         -e XAUTHORITY=$XAUTH \
         -e QT_X11_NO_MITSHM=1 \
+        $([ "$VSCODE_READY" = true ] && echo "-l com.microsoft.vscode.ready=true") \
+        $([ "$VSCODE_READY" = true ] && echo "-l com.microsoft.vscode.devcontainer=true") \
         $USER_OPTIONS \
         --entrypoint "/entrypoint.sh" \
         $IMAGE_NAME $ROS2_DISTRO "$CUSTOM_CMD"

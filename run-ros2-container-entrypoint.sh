@@ -5,6 +5,24 @@ file="run-ros2-container-entrypoint.sh"
 # Source ROS2 setup
 source /opt/ros/$1/setup.bash
 
+# Setup VS Code development tools
+if [ ! -f "/home/ubuntu/.vscode_setup_done" ]; then
+  echo "Installing VS Code dependencies for remote development..."
+  apt-get update -qq > /dev/null 2>&1
+  apt-get install -y -qq git curl wget python3-pip > /dev/null 2>&1
+  
+  # Create necessary directories for VS Code
+  mkdir -p /home/ubuntu/.vscode-server/extensions
+  
+  # Set permissions
+  if [ "$(id -u)" != "0" ]; then
+    chown -R $(id -u):$(id -g) /home/ubuntu/.vscode-server
+  fi
+  
+  # Mark VS Code setup as done
+  touch /home/ubuntu/.vscode_setup_done
+fi
+
 # Setup projects directory
 if [ ! -d "/home/ubuntu/projects" ]; then
   mkdir -p /home/ubuntu/projects
