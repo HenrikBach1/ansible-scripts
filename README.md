@@ -57,10 +57,12 @@ All containers automatically have the ROS2 environment sourced in:
 - Login shells (VS Code terminals)
 - Interactive sessions
 
-For non-interactive or non-login shells, use the provided wrapper script:
+For non-interactive or non-login shells (such as `docker exec` commands), use the provided wrapper script:
 ```bash
 ~/bin/source_ros ros2 <command>
 ```
+
+**Note**: If you encounter a password prompt when running the container, you can safely press Ctrl+C to cancel it. The container will still work correctly, and you can use the `source_ros` wrapper script for ROS2 commands in non-login shells.
 
 ## Container Environment
 

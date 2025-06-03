@@ -106,6 +106,11 @@ stop() {
     builtin exit 0
 }
 
+# Source ROS2 environment in every shell
+if [ -f /opt/ros/${ROS_RELEASE:-jazzy}/setup.bash ]; then
+    source /opt/ros/${ROS_RELEASE:-jazzy}/setup.bash
+fi
+
 # Set a trap to handle Ctrl+C and other signals
 trap '' INT QUIT TSTP
 EOF
@@ -295,12 +300,9 @@ if [ "$(id -u)" = "0" ]; then
     echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> /etc/profile.d/ros_setup.sh
     chmod +x /etc/profile.d/ros_setup.sh
 else
-    # If not running as root, try with sudo (may fail if sudo is not available)
-    if command -v sudo &> /dev/null; then
-        if ! sudo grep -q "source /opt/ros/.*setup.bash" /etc/bash.bashrc 2>/dev/null; then
-            sudo bash -c "echo '' >> /etc/bash.bashrc && echo '# Source ROS2 setup for all users' >> /etc/bash.bashrc && echo 'source /opt/ros/${ROS_RELEASE}/setup.bash' >> /etc/bash.bashrc" 2>/dev/null || true
-        fi
-    fi
+    # If not running as root, don't try to use sudo at all
+    # Just rely on user-level configuration
+    echo "# Running as non-root user, skipping system-wide configurations"
 fi
 
 # Create helper script to source ROS and run commands

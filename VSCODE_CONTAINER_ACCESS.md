@@ -41,6 +41,25 @@ When you connect to the container using `docker exec -it ros2_container bash`, c
 
 This script ensures that all container commands work properly when connecting directly with Docker exec.
 
+### ROS2 Environment in Docker Exec
+
+When using `docker exec` directly, the ROS2 environment is not automatically sourced. You have two options:
+
+1. Use a login shell:
+   ```bash
+   docker exec -it ros2_container bash -l
+   ```
+
+2. Use the source_ros wrapper script:
+   ```bash
+   docker exec -it ros2_container ~/bin/source_ros bash
+   ```
+
+The second option is useful for one-off commands:
+```bash
+docker exec -it ros2_container ~/bin/source_ros ros2 topic list
+```
+
 ## Recommended VS Code Extensions for ROS2 Development
 
 Once connected to the container, consider installing these extensions:
