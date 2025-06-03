@@ -1,10 +1,11 @@
 #!/bin/bash
 # This is a wrapper script to make it easy to use docker exec with the container
+# Provides an enhanced version of 'docker exec -it' with additional container commands
 
 # Check if a container name was provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <container_name> [command]"
-    echo "Commands: help, detach, stop (default is help)"
+    echo "Commands: help, detach, stop, bash (default is help)"
     exit 1
 fi
 
@@ -51,7 +52,7 @@ case "$COMMAND" in
         ;;
     bash)
         # Start a new bash session with the help message
-        docker exec -it "$CONTAINER_NAME" bash -c "echo 'ROS2 Container Commands:'; echo '  - Type \"exit\" or press Ctrl+D: Detach from container (container keeps running)'; echo '  - Run \"./container-cmd $CONTAINER_NAME stop\": Stop the container completely'; echo '  - Run \"./container-cmd $CONTAINER_NAME help\": Show help message'; echo ''; exec bash"
+        docker exec -it "$CONTAINER_NAME" bash -c "echo 'ROS2 Container Commands:'; echo '  - Type \"exit\" or press Ctrl+D: Detach from container (container keeps running)'; echo '  - Run \"./docker-exec-it $CONTAINER_NAME stop\": Stop the container completely'; echo '  - Run \"./docker-exec-it $CONTAINER_NAME help\": Show help message'; echo ''; exec bash"
         ;;
     *)
         echo "Unknown command: $COMMAND"
