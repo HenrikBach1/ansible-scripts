@@ -113,6 +113,20 @@ EOF
 # Make sure aliases are loaded
 echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> $HOME/.bashrc
 
+# Create a system-wide profile script that will be loaded by all shells
+# This ensures commands are available even with docker exec
+cat > /etc/profile.d/container-commands.sh << 'EOF'
+# Add the user's bin directory to PATH for all shells
+export PATH="/home/ubuntu/bin:$PATH"
+
+# Source bash aliases if they exist
+if [ -f /home/ubuntu/.bash_aliases ]; then
+    . /home/ubuntu/.bash_aliases
+fi
+EOF
+
+chmod +x /etc/profile.d/container-commands.sh
+
 # Add a custom bash logout script to prevent accidental container shutdown
 cat > $HOME/.bash_logout << 'EOF'
 # This script runs when the shell exits
@@ -131,65 +145,60 @@ EOF
 
 echo "if [ -f ~/.bash_completion ]; then . ~/.bash_completion; fi" >> $HOME/.bashrc
 
-# Create executable scripts in bin directory
-cat > $HOME/bin/detach << 'EOF'
-#!/bin/bash
-echo "Detaching from container (container keeps running)..."
-echo "Container will continue running in the background."
+# Fix for container-help and other commands not being available in docker exec
+echo '#!/bin/bash' > /usr/local/bin/container-help
+echo 'echo "ROS2 Container Command Guide:"' >> /usr/local/bin/container-help
+echo 'echo "-----------------------------"' >> /usr/local/bin/container-help
+echo 'echo "  - Type '\''exit'\'' or '\''detach'\'': Detach from container (container keeps running)"' >> /usr/local/bin/container-help
+echo 'echo "  - Type '\''stop'\'': Stop the container completely (container will shut down)"' >> /usr/local/bin/container-help
+echo 'echo "  - Type '\''container-help'\'': Show this help message"' >> /usr/local/bin/container-help
+echo 'echo ""' >> /usr/local/bin/container-help
+echo 'echo "Note: When you detach, a helper script on the host will monitor and restart"' >> /usr/local/bin/container-help
+echo 'echo "      the container if needed, ensuring it continues running in the background."' >> /usr/local/bin/container-help
+echo 'echo ""' >> /usr/local/bin/container-help
+echo 'echo "Note: When you use '\''stop'\'', the container will be completely shut down and"' >> /usr/local/bin/container-help
+echo 'echo "      will not continue running in the background."' >> /usr/local/bin/container-help
+chmod +x /usr/local/bin/container-help
 
-# Create a marker file to signal we want to detach
-touch $HOME/.container_detach_requested
+echo '#!/bin/bash' > /usr/local/bin/detach
+echo 'echo "Detaching from container (container keeps running)..."' >> /usr/local/bin/detach
+echo 'echo "Container will continue running in the background."' >> /usr/local/bin/detach
+echo 'touch /home/ubuntu/.container_detach_requested' >> /usr/local/bin/detach
+echo 'kill -HUP $PPID || builtin exit 0' >> /usr/local/bin/detach
+chmod +x /usr/local/bin/detach
 
-# Force disconnect from tty while ensuring container keeps running
-kill -HUP $PPID || builtin exit 0
+echo '#!/bin/bash' > /usr/local/bin/stop
+echo 'echo "Stopping container..."' >> /usr/local/bin/stop
+echo 'echo "Container will be completely stopped (not just detached)."' >> /usr/local/bin/stop
+echo 'touch /home/ubuntu/.container_stop_requested' >> /usr/local/bin/stop
+echo 'pkill -f "sleep 3600" || true' >> /usr/local/bin/stop
+echo 'echo "Container stop requested. Container will shut down completely."' >> /usr/local/bin/stop
+echo 'echo "Terminating session now..."' >> /usr/local/bin/stop
+echo 'builtin exit 0' >> /usr/local/bin/stop
+chmod +x /usr/local/bin/stop
+
+# Run container-help at login, but only add it once
+
+# Add the bin directory to PATH in bashrc
+export PATH="$HOME/bin:/usr/local/bin:$PATH"
+
+# Create simple bashrc for docker exec sessions that will auto-load for all sessions
+cat > /etc/bash.bashrc << 'EOF'
+# System-wide .bashrc file for interactive bash shells
+
+# If not running interactively, don't do anything
+[ -z "$PS1" ] && return
+
+# Show container help on login for interactive shells
+if [ -t 0 ] && [ -t 1 ]; then
+  if command -v container-help >/dev/null 2>&1; then
+    container-help
+  fi
+fi
 EOF
 
-cat > $HOME/bin/stop << 'EOF'
-#!/bin/bash
-echo "Stopping container..."
-echo "Container will be completely stopped (not just detached)."
-
-# Create a marker file to indicate we want to stop the container
-touch $HOME/.container_stop_requested
-
-# Kill any background processes keeping the container alive
-pkill -f "sleep 3600" || true
-
-# Output a clear message about what's happening
-echo "Container stop requested. Container will shut down completely."
-echo "Terminating session now..."
-
-# Use exit directly - this will terminate the bash session
-builtin exit 0
-EOF
-
-# Create a help script
-cat > $HOME/bin/container-help << 'EOF'
-#!/bin/bash
-echo "ROS2 Container Command Guide:"
-echo "-----------------------------"
-echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
-echo "  - Type 'stop': Stop the container completely (container will shut down)"
-echo "  - Type 'container-help': Show this help message"
-echo ""
-echo "Note: When you detach, a helper script on the host will monitor and restart"
-echo "      the container if needed, ensuring it continues running in the background."
-echo ""
-echo "Note: When you use 'stop', the container will be completely shut down and"
-echo "      will not continue running in the background."
-EOF
-
-chmod +x $HOME/bin/container-help
-
-# Make the scripts executable
-chmod +x $HOME/bin/detach
-chmod +x $HOME/bin/stop
-
-# Create a symbolic link for exit -> detach
-ln -sf $HOME/bin/detach $HOME/bin/exit
-
-# Add the bin directory to PATH
-export PATH="$HOME/bin:$PATH"
+# Simplify by removing custom exit/detach from user's .bashrc
+# Just use the system-wide command that's now available everywhere
 
 # Run container-help at login, but only add it once
 if ! grep -q "container-help" $HOME/.bashrc; then

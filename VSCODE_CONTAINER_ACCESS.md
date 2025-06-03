@@ -24,6 +24,23 @@ This guide explains how to connect to your ROS2 Docker container using VS Code R
    - Install VS Code extensions directly inside the container
    - Use the integrated terminal to run ROS2 commands
 
+## Using Docker Exec with the Container
+
+When you connect to the container using `docker exec -it ros2_container bash`, custom commands like `container-help` may not be available. Use the provided `container-cmd` script instead:
+
+```bash
+# Show container help
+./container-cmd ros2_container help
+
+# Start a bash session with command info
+./container-cmd ros2_container bash
+
+# Stop the container
+./container-cmd ros2_container stop
+```
+
+This script ensures that all container commands work properly when connecting directly with Docker exec.
+
 ## Recommended VS Code Extensions for ROS2 Development
 
 Once connected to the container, consider installing these extensions:
