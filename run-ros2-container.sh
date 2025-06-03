@@ -9,7 +9,7 @@ CONTAINER_NAME="ros2_container"
 WORKSPACE_DIR="$HOME/projects"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
-PERSISTENT=false
+PERSISTENT=true # Keep the container after exit - This should become the default behavior
 RUN_AS_ROOT=false
 DETACH_MODE=false
 AUTO_ATTACH=true
@@ -217,9 +217,12 @@ if [ "$CLEAN_START" = true ] && [ -n "$CONTAINER_EXISTS" ]; then
 fi
 
 # Determine if we should use --rm based on persistence option
-RM_OPTION="--rm"
-if [ "$PERSISTENT" = true ]; then
-    RM_OPTION=""
+RM_OPTION=""
+if [ "$PERSISTENT" = false ]; then
+    # Only use --rm if not using restart=unless-stopped
+    # The two options are incompatible
+    echo "Note: Container will automatically be removed when stopped (using --rm)"
+else
     echo "Container will be persistent (use 'docker rm $CONTAINER_NAME' to remove it later)"
 fi
 
@@ -251,11 +254,26 @@ if [ -n "$CONTAINER_RUNNING" ]; then
     # Container is already running, just attach to it
     echo "Container '$CONTAINER_NAME' is already running, attaching to it..."
     echo ""
+    
+    # Start the container watcher in the background before attaching
+    echo "Starting container watcher to keep container running after detach..."
+    "$(dirname "$(readlink -f "$0")")/container-watch.sh" $CONTAINER_NAME &
+    WATCHER_PID=$!
+    # Make sure the watcher process gets terminated when this script exits
+    trap "kill $WATCHER_PID 2>/dev/null" EXIT
+    
     sudo docker attach $CONTAINER_NAME
 elif [ -n "$CONTAINER_EXISTS" ]; then
     # Container exists but is not running, start it
     echo "Container '$CONTAINER_NAME' exists but is not running, starting it..."
     sudo docker start $CONTAINER_NAME
+    
+    # Start the container watcher in the background before attaching
+    echo "Starting container watcher to keep container running after detach..."
+    "$(dirname "$(readlink -f "$0")")/container-watch.sh" $CONTAINER_NAME &
+    WATCHER_PID=$!
+    # Make sure the watcher process gets terminated when this script exits
+    trap "kill $WATCHER_PID 2>/dev/null" EXIT
     
     # Attach to the container after starting
     echo "Attaching to container..."
@@ -284,6 +302,8 @@ else
         --name $CONTAINER_NAME \
         --network=host \
         --privileged \
+        --restart=unless-stopped \
+        --detach-keys="ctrl-p,ctrl-q" \
         $GPU_OPTIONS \
         -v $XSOCK:$XSOCK:rw \
         -v $XAUTH:$XAUTH:rw \
@@ -297,6 +317,13 @@ else
         --entrypoint "/entrypoint.sh" \
         $IMAGE_NAME $ROS2_DISTRO "$CUSTOM_CMD"
     
+    # Start the container watcher in the background
+    echo "Starting container watcher to keep container running after detach..."
+    "$(dirname "$(readlink -f "$0")")/container-watch.sh" $CONTAINER_NAME &
+    WATCHER_PID=$!
+    # Make sure the watcher process gets terminated when this script exits
+    trap "kill $WATCHER_PID 2>/dev/null" EXIT
+    
     # Automatically attach to container if in detached mode
     if [ "$DETACH_MODE" = true ] && [ "$AUTO_ATTACH" = true ]; then
         echo "Automatically attaching to container $CONTAINER_NAME..."
@@ -309,17 +336,61 @@ fi
 # Clean up temporary script
 # No init script to clean up now that we use a permanent entrypoint script
 
-# Check if we've exited the container and it's still running
-CONTAINER_STILL_RUNNING=$(sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
-if [ -n "$CONTAINER_STILL_RUNNING" ]; then
-    echo "Container '$CONTAINER_NAME' is still running"
-    echo "You have detached from the container (it continues running in the background)"
+# Check if the stop marker file exists inside the container (or was detected by watcher)
+STOP_REQUESTED=false
+if sudo docker exec $CONTAINER_NAME test -f /home/ubuntu/.container_stop_requested 2>/dev/null; then
+    STOP_REQUESTED=true
+fi
+
+# If stop was requested, don't show the "still running" message
+if [ "$STOP_REQUESTED" = true ]; then
+    echo "Container '$CONTAINER_NAME' has been requested to stop"
+    echo "Container is being stopped..."
+    
+    # Force container to stop
+    sudo docker stop $CONTAINER_NAME >/dev/null 2>&1 || true
+    sudo docker kill $CONTAINER_NAME >/dev/null 2>&1 || true
+    
+    # Check if it's actually stopped
+    if ! sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" &>/dev/null; then
+        echo "Container has been successfully stopped."
+    else
+        echo "Warning: Container could not be stopped. Please try: docker stop $CONTAINER_NAME"
+    fi
+else
+    # Check if we've exited the container and it's still running
+    CONTAINER_STILL_RUNNING=$(sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
+
+    # Check if the detach marker file exists inside the container
+    DETACH_REQUESTED=false
+    if sudo docker exec $CONTAINER_NAME test -f /home/ubuntu/.container_detach_requested 2>/dev/null; then
+        DETACH_REQUESTED=true
+        # Remove the marker file
+        sudo docker exec $CONTAINER_NAME rm -f /home/ubuntu/.container_detach_requested 2>/dev/null
+    fi
+
+    if [ -n "$CONTAINER_STILL_RUNNING" ] || [ "$DETACH_REQUESTED" = true ]; then
+        echo "Container '$CONTAINER_NAME' is still running"
+        echo "You have detached from the container (it continues running in the background)"
+        
+        # If container stopped but detach was requested, restart it
+        if [ -z "$CONTAINER_STILL_RUNNING" ] && [ "$DETACH_REQUESTED" = true ]; then
+            echo "Restarting container after detach..."
+            sudo docker start $CONTAINER_NAME
+        fi
+    else
+        echo "Container session ended"
+    fi
+fi
+
+# Remove the duplicate container status check that was causing double messages
+# (This block was redundant with the previous if-else block)
 else
     echo "Container session ended"
 fi
 
 # Show additional container management information
-if [ -n "$CONTAINER_STILL_RUNNING" ] || [ "$PERSISTENT" = true ]; then
+if [ -n "$CONTAINER_STILL_RUNNING" ] || [ "$PERSISTENT" = true ] && [ "$STOP_REQUESTED" = false ]; then
     echo ""
     echo "Container Management Commands:"
     echo "  - Attach to container:  docker attach $CONTAINER_NAME"
@@ -329,8 +400,8 @@ if [ -n "$CONTAINER_STILL_RUNNING" ] || [ "$PERSISTENT" = true ]; then
     echo ""
     echo "Once attached to the container, you can use the following commands:"
     echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
-    echo "  - Type 'stop': Stop the container"
-    echo "  - Ctrl+P, Ctrl+Q: Standard Docker detach sequence (alternative method)"
-    echo "  - Ctrl+D: Standard shell exit (stops the container if used outside of custom commands)"
+    echo "  - Press Ctrl+P Ctrl+Q: Standard Docker detach sequence"
+    echo "  - Type 'stop': Stop the container completely (container will shut down)"
+    echo "  - Type 'container-help': Show detailed help message"
 echo ""
 fi

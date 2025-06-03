@@ -24,6 +24,10 @@ CONTAINER_ID=$(hostname)
 # Change to workspace directory
 cd /workspace
 
+# Create a simple background daemon to keep the container running
+nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 &
+KEEP_ALIVE_PID=$!
+
 # Source ROS2 setup
 source /opt/ros/$1/setup.bash
 
@@ -31,9 +35,9 @@ source /opt/ros/$1/setup.bash
 echo ""
 echo "ROS2 Container Commands:"
 echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
-echo "  - Type 'stop': Stop the container"
-echo "  - Ctrl+P, Ctrl+Q: Standard Docker detach sequence (alternative method)"
-echo "  - Ctrl+D: Standard shell exit (stops the container)"
+echo "  - Type 'stop': Stop the container completely (container will shut down)"
+echo "  - Press Ctrl+P Ctrl+Q: Standard Docker detach sequence"
+echo "  - Ctrl+D: Standard shell exit (in most cases will detach instead of stopping)"
 echo ""
 
 # Create a bin directory in the user's home
@@ -44,21 +48,44 @@ cat > $HOME/.bash_aliases << 'EOF'
 # Define detach function to properly detach from container
 detach() {
     echo "Detaching from container (container keeps running)..."
-    # Send SIGHUP to the parent process - this is the most reliable method to detach
-    # without stopping the container in various terminal environments including VS Code
-    kill -HUP $PPID
+    echo "Container will continue running in the background."
+    
+    # Create a marker file to signal we want to detach
+    touch $HOME/.container_detach_requested
+    
+    # Force disconnect from tty while ensuring container keeps running
+    # The background daemon started at container launch will keep it alive
+    kill -HUP $PPID || builtin exit 0
 }
 
 # Override exit to behave like detach
 exit() {
     echo "Using 'exit' to detach from container (container keeps running)..."
+    
+    # Call our custom detach function
     detach
 }
 
-# Define stop function to actually exit
+# Define stop function to actually exit and stop the container
 stop() {
     echo "Stopping container..."
-    builtin exit
+    echo "Container will be completely stopped (not just detached)."
+    
+    # Create a marker file to indicate we want to stop the container
+    # The container-watch.sh script will see this and stop the container
+    touch $HOME/.container_stop_requested
+    
+    # Kill the keep-alive process if we have it
+    if [ -n "$KEEP_ALIVE_PID" ]; then
+        kill $KEEP_ALIVE_PID 2>/dev/null || true
+    fi
+    
+    # Output a clear message about what's happening
+    echo "Container stop requested. Container will completely shut down."
+    echo "Terminating session now..."
+    
+    # Exit the shell with special status to indicate stop
+    builtin exit 0
 }
 
 # Set a trap to handle Ctrl+C and other signals
@@ -67,6 +94,16 @@ EOF
 
 # Make sure aliases are loaded
 echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> $HOME/.bashrc
+
+# Add a custom bash logout script to prevent accidental container shutdown
+cat > $HOME/.bash_logout << 'EOF'
+# This script runs when the shell exits
+# Create a marker file to signal we want to detach (unless we used 'stop')
+if [ ! -f $HOME/.container_stop_requested ]; then
+    touch $HOME/.container_detach_requested
+    echo "Shell exiting, but container will keep running in the background."
+fi
+EOF
 
 # Add bash completion for our custom commands
 cat > $HOME/.bash_completion << 'EOF'
@@ -77,44 +114,51 @@ EOF
 echo "if [ -f ~/.bash_completion ]; then . ~/.bash_completion; fi" >> $HOME/.bashrc
 
 # Create executable scripts in bin directory
-# Create executable scripts in bin directory
 cat > $HOME/bin/detach << 'EOF'
 #!/bin/bash
 echo "Detaching from container (container keeps running)..."
-# The most reliable way to detach from a Docker container in VS Code terminal
-# is to send a SIGHUP signal to the parent process
-PPID_TO_KILL=$PPID
-# Trap any errors
-trap 'echo "Detach failed, trying alternative method..."; kill -TERM $PPID_TO_KILL' ERR
+echo "Container will continue running in the background."
 
-# Try SIGHUP first (most reliable method)
-kill -HUP $PPID_TO_KILL
-# If we get here, the first method failed, try SIGTERM as a fallback
-kill -TERM $PPID_TO_KILL
+# Create a marker file to signal we want to detach
+touch $HOME/.container_detach_requested
+
+# Force disconnect from tty while ensuring container keeps running
+kill -HUP $PPID || builtin exit 0
 EOF
 
 cat > $HOME/bin/stop << 'EOF'
 #!/bin/bash
 echo "Stopping container..."
-echo "Container will be stopped and session will end."
+echo "Container will be completely stopped (not just detached)."
+
+# Create a marker file to indicate we want to stop the container
+touch $HOME/.container_stop_requested
+
+# Kill any background processes keeping the container alive
+pkill -f "sleep 3600" || true
+
+# Output a clear message about what's happening
+echo "Container stop requested. Container will shut down completely."
+echo "Terminating session now..."
+
 # Use exit directly - this will terminate the bash session
-# and consequently stop the container if it was started with --rm
-builtin exit
+builtin exit 0
 EOF
 
 # Create a help script
 cat > $HOME/bin/container-help << 'EOF'
-# #!/bin/bash
-# echo "ROS2 Container Command Guide:"
-# echo "-----------------------------"
-# echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
-# echo "  - Type 'stop': Stop the container"
-# echo "  - Type 'container-help': Show this help message"
-# echo "  - Ctrl+P, Ctrl+Q: Standard Docker detach sequence (alternative method)"
-# echo "  - Ctrl+D: Standard shell exit (stops the container if used outside of custom commands)"
-# echo ""
-# echo "Note: These commands provide the most reliable way to detach from the container"
-# echo "      without stopping it in VS Code terminal."
+#!/bin/bash
+echo "ROS2 Container Command Guide:"
+echo "-----------------------------"
+echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
+echo "  - Type 'stop': Stop the container completely (container will shut down)"
+echo "  - Type 'container-help': Show this help message"
+echo ""
+echo "Note: When you detach, a helper script on the host will monitor and restart"
+echo "      the container if needed, ensuring it continues running in the background."
+echo ""
+echo "Note: When you use 'stop', the container will be completely shut down and"
+echo "      will not continue running in the background."
 EOF
 
 chmod +x $HOME/bin/container-help
