@@ -115,7 +115,9 @@ echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> $HOME/.bashrc
 
 # Create a system-wide profile script that will be loaded by all shells
 # This ensures commands are available even with docker exec
-cat > /etc/profile.d/container-commands.sh << 'EOF'
+if [ "$(id -u)" = "0" ]; then
+  # Only attempt to create system-wide files if running as root
+  cat > /etc/profile.d/container-commands.sh << 'EOF'
 # Add the user's bin directory to PATH for all shells
 export PATH="/home/ubuntu/bin:$PATH"
 
@@ -125,7 +127,11 @@ if [ -f /home/ubuntu/.bash_aliases ]; then
 fi
 EOF
 
-chmod +x /etc/profile.d/container-commands.sh
+  chmod +x /etc/profile.d/container-commands.sh
+else
+  # If not root, just add to user's bashrc
+  echo 'export PATH="/home/ubuntu/bin:$PATH"' >> $HOME/.bashrc
+fi
 
 # Add a custom bash logout script to prevent accidental container shutdown
 cat > $HOME/.bash_logout << 'EOF'
@@ -146,36 +152,76 @@ EOF
 echo "if [ -f ~/.bash_completion ]; then . ~/.bash_completion; fi" >> $HOME/.bashrc
 
 # Fix for container-help and other commands not being available in docker exec
-echo '#!/bin/bash' > /usr/local/bin/container-help
-echo 'echo "ROS2 Container Command Guide:"' >> /usr/local/bin/container-help
-echo 'echo "-----------------------------"' >> /usr/local/bin/container-help
-echo 'echo "  - Type '\''exit'\'' or '\''detach'\'': Detach from container (container keeps running)"' >> /usr/local/bin/container-help
-echo 'echo "  - Type '\''stop'\'': Stop the container completely (container will shut down)"' >> /usr/local/bin/container-help
-echo 'echo "  - Type '\''container-help'\'': Show this help message"' >> /usr/local/bin/container-help
-echo 'echo ""' >> /usr/local/bin/container-help
-echo 'echo "Note: When you detach, a helper script on the host will monitor and restart"' >> /usr/local/bin/container-help
-echo 'echo "      the container if needed, ensuring it continues running in the background."' >> /usr/local/bin/container-help
-echo 'echo ""' >> /usr/local/bin/container-help
-echo 'echo "Note: When you use '\''stop'\'', the container will be completely shut down and"' >> /usr/local/bin/container-help
-echo 'echo "      will not continue running in the background."' >> /usr/local/bin/container-help
-chmod +x /usr/local/bin/container-help
+if [ "$(id -u)" = "0" ]; then
+  # Only create system-wide commands if running as root
+  echo '#!/bin/bash' > /usr/local/bin/container-help
+  echo 'echo "ROS2 Container Command Guide:"' >> /usr/local/bin/container-help
+  echo 'echo "-----------------------------"' >> /usr/local/bin/container-help
+  echo 'echo "  - Type '\''exit'\'' or '\''detach'\'': Detach from container (container keeps running)"' >> /usr/local/bin/container-help
+  echo 'echo "  - Type '\''stop'\'': Stop the container completely (container will shut down)"' >> /usr/local/bin/container-help
+  echo 'echo "  - Type '\''container-help'\'': Show this help message"' >> /usr/local/bin/container-help
+  echo 'echo ""' >> /usr/local/bin/container-help
+  echo 'echo "Note: When you detach, a helper script on the host will monitor and restart"' >> /usr/local/bin/container-help
+  echo 'echo "      the container if needed, ensuring it continues running in the background."' >> /usr/local/bin/container-help
+  echo 'echo ""' >> /usr/local/bin/container-help
+  echo 'echo "Note: When you use '\''stop'\'', the container will be completely shut down and"' >> /usr/local/bin/container-help
+  echo 'echo "      will not continue running in the background."' >> /usr/local/bin/container-help
+  chmod +x /usr/local/bin/container-help
 
-echo '#!/bin/bash' > /usr/local/bin/detach
-echo 'echo "Detaching from container (container keeps running)..."' >> /usr/local/bin/detach
-echo 'echo "Container will continue running in the background."' >> /usr/local/bin/detach
-echo 'touch /home/ubuntu/.container_detach_requested' >> /usr/local/bin/detach
-echo 'kill -HUP $PPID || builtin exit 0' >> /usr/local/bin/detach
-chmod +x /usr/local/bin/detach
+  echo '#!/bin/bash' > /usr/local/bin/detach
+  echo 'echo "Detaching from container (container keeps running)..."' >> /usr/local/bin/detach
+  echo 'echo "Container will continue running in the background."' >> /usr/local/bin/detach
+  echo 'touch /home/ubuntu/.container_detach_requested' >> /usr/local/bin/detach
+  echo 'kill -HUP $PPID || builtin exit 0' >> /usr/local/bin/detach
+  chmod +x /usr/local/bin/detach
 
-echo '#!/bin/bash' > /usr/local/bin/stop
-echo 'echo "Stopping container..."' >> /usr/local/bin/stop
-echo 'echo "Container will be completely stopped (not just detached)."' >> /usr/local/bin/stop
-echo 'touch /home/ubuntu/.container_stop_requested' >> /usr/local/bin/stop
-echo 'pkill -f "sleep 3600" || true' >> /usr/local/bin/stop
-echo 'echo "Container stop requested. Container will shut down completely."' >> /usr/local/bin/stop
-echo 'echo "Terminating session now..."' >> /usr/local/bin/stop
-echo 'builtin exit 0' >> /usr/local/bin/stop
-chmod +x /usr/local/bin/stop
+  echo '#!/bin/bash' > /usr/local/bin/stop
+  echo 'echo "Stopping container..."' >> /usr/local/bin/stop
+  echo 'echo "Container will be completely stopped (not just detached)."' >> /usr/local/bin/stop
+  echo 'touch /home/ubuntu/.container_stop_requested' >> /usr/local/bin/stop
+  echo 'pkill -f "sleep 3600" || true' >> /usr/local/bin/stop
+  echo 'echo "Container stop requested. Container will shut down completely."' >> /usr/local/bin/stop
+  echo 'echo "Terminating session now..."' >> /usr/local/bin/stop
+  echo 'builtin exit 0' >> /usr/local/bin/stop
+  chmod +x /usr/local/bin/stop
+else
+  # If not root, create in user's bin directory instead
+  mkdir -p $HOME/bin
+  
+  echo '#!/bin/bash' > $HOME/bin/container-help
+  echo 'echo "ROS2 Container Command Guide:"' >> $HOME/bin/container-help
+  echo 'echo "-----------------------------"' >> $HOME/bin/container-help
+  echo 'echo "  - Type '\''exit'\'' or '\''detach'\'': Detach from container (container keeps running)"' >> $HOME/bin/container-help
+  echo 'echo "  - Type '\''stop'\'': Stop the container completely (container will shut down)"' >> $HOME/bin/container-help
+  echo 'echo "  - Type '\''container-help'\'': Show this help message"' >> $HOME/bin/container-help
+  echo 'echo ""' >> $HOME/bin/container-help
+  echo 'echo "Note: When you detach, a helper script on the host will monitor and restart"' >> $HOME/bin/container-help
+  echo 'echo "      the container if needed, ensuring it continues running in the background."' >> $HOME/bin/container-help
+  echo 'echo ""' >> $HOME/bin/container-help
+  echo 'echo "Note: When you use '\''stop'\'', the container will be completely shut down and"' >> $HOME/bin/container-help
+  echo 'echo "      will not continue running in the background."' >> $HOME/bin/container-help
+  chmod +x $HOME/bin/container-help
+  
+  echo '#!/bin/bash' > $HOME/bin/detach
+  echo 'echo "Detaching from container (container keeps running)..."' >> $HOME/bin/detach
+  echo 'echo "Container will continue running in the background."' >> $HOME/bin/detach
+  echo 'touch $HOME/.container_detach_requested' >> $HOME/bin/detach
+  echo 'kill -HUP $PPID || builtin exit 0' >> $HOME/bin/detach
+  chmod +x $HOME/bin/detach
+  
+  echo '#!/bin/bash' > $HOME/bin/stop
+  echo 'echo "Stopping container..."' >> $HOME/bin/stop
+  echo 'echo "Container will be completely stopped (not just detached)."' >> $HOME/bin/stop
+  echo 'touch $HOME/.container_stop_requested' >> $HOME/bin/stop
+  echo 'pkill -f "sleep 3600" || true' >> $HOME/bin/stop
+  echo 'echo "Container stop requested. Container will shut down completely."' >> $HOME/bin/stop
+  echo 'echo "Terminating session now..."' >> $HOME/bin/stop
+  echo 'builtin exit 0' >> $HOME/bin/stop
+  chmod +x $HOME/bin/stop
+  
+  # Add to PATH in this session
+  export PATH="$HOME/bin:$PATH"
+fi
 
 # Run container-help at login, but only add it once
 
@@ -183,7 +229,9 @@ chmod +x /usr/local/bin/stop
 export PATH="$HOME/bin:/usr/local/bin:$PATH"
 
 # Create simple bashrc for docker exec sessions that will auto-load for all sessions
-cat > /etc/bash.bashrc << 'EOF'
+if [ "$(id -u)" = "0" ]; then
+  # Only attempt to modify system files if running as root
+  cat > /etc/bash.bashrc << 'EOF'
 # System-wide .bashrc file for interactive bash shells
 
 # If not running interactively, don't do anything
@@ -196,6 +244,7 @@ if [ -t 0 ] && [ -t 1 ]; then
   fi
 fi
 EOF
+fi
 
 # Simplify by removing custom exit/detach from user's .bashrc
 # Just use the system-wide command that's now available everywhere
@@ -205,6 +254,60 @@ if ! grep -q "container-help" $HOME/.bashrc; then
     echo '# Display container help at login (only once)' >> $HOME/.bashrc
     echo 'container-help' >> $HOME/.bashrc
 fi
+
+# Add ROS2 source command to .bashrc if not already present
+ROS_RELEASE="$1"
+if ! grep -q "source /opt/ros/.*setup.bash" $HOME/.bashrc; then
+    echo "" >> $HOME/.bashrc
+    echo "# Source ROS2 setup automatically" >> $HOME/.bashrc
+    echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> $HOME/.bashrc
+    echo "Added ROS2 source command to user's .bashrc file."
+fi
+
+# Also add ROS2 source command to a more reliable source location
+# Create a profile script that will be loaded by all shells
+echo "#!/bin/bash" > $HOME/.ros_profile
+echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> $HOME/.ros_profile
+chmod +x $HOME/.ros_profile
+
+# Create a symlink in user's bin directory
+mkdir -p $HOME/bin
+ln -sf $HOME/.ros_profile $HOME/bin/ros_setup
+
+# Add the script to .profile if not already there
+if ! grep -q "source.*/.ros_profile" $HOME/.profile 2>/dev/null; then
+    echo "" >> $HOME/.profile
+    echo "# Source ROS2 setup automatically" >> $HOME/.profile
+    echo "source \$HOME/.ros_profile" >> $HOME/.profile
+fi
+
+# Add to system-wide bashrc to ensure it's sourced in all shells
+if [ "$(id -u)" = "0" ]; then
+    # Only attempt to modify system files if running as root
+    if ! grep -q "source /opt/ros/.*setup.bash" /etc/bash.bashrc; then
+        echo "" >> /etc/bash.bashrc
+        echo "# Source ROS2 setup for all users" >> /etc/bash.bashrc
+        echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> /etc/bash.bashrc
+    fi
+    
+    # Also add to /etc/profile.d
+    echo "#!/bin/bash" > /etc/profile.d/ros_setup.sh
+    echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> /etc/profile.d/ros_setup.sh
+    chmod +x /etc/profile.d/ros_setup.sh
+else
+    # If not running as root, try with sudo (may fail if sudo is not available)
+    if command -v sudo &> /dev/null; then
+        if ! sudo grep -q "source /opt/ros/.*setup.bash" /etc/bash.bashrc 2>/dev/null; then
+            sudo bash -c "echo '' >> /etc/bash.bashrc && echo '# Source ROS2 setup for all users' >> /etc/bash.bashrc && echo 'source /opt/ros/${ROS_RELEASE}/setup.bash' >> /etc/bash.bashrc" 2>/dev/null || true
+        fi
+    fi
+fi
+
+# Create helper script to source ROS and run commands
+echo '#!/bin/bash' > $HOME/bin/source_ros
+echo "source /opt/ros/${ROS_RELEASE}/setup.bash" >> $HOME/bin/source_ros
+echo 'exec "$@"' >> $HOME/bin/source_ros
+chmod +x $HOME/bin/source_ros
 
 # Execute the provided command or fallback to bash
 shift
