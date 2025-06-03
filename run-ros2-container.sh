@@ -209,8 +209,6 @@ echo "Starting ROS2 $ROS2_DISTRO container with X11 forwarding..."
 echo "Workspace directory: $WORKSPACE_DIR"
 echo "Note: You can safely ignore the 'groups: cannot find name for group ID' warning."
 
-xhost +local:root
-
 # Check if container already exists
 CONTAINER_EXISTS=$(sudo docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
 CONTAINER_RUNNING=$(sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
@@ -306,6 +304,8 @@ else
     else
         echo "Container will run in interactive mode"
     fi
+
+    xhost +local:root
 
     # Run the container
     sudo docker run $INTERACTIVE_OPTION $RM_OPTION \
