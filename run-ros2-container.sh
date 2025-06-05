@@ -9,12 +9,11 @@ CONTAINER_NAME="ros2_container"
 WORKSPACE_DIR="$HOME/projects"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
-PERSISTENT=true # Keep the container after exit - Copilot: This should become the default behavior
+PERSISTENT=false
 RUN_AS_ROOT=false
 DETACH_MODE=false
 AUTO_ATTACH=true
 CLEAN_START=false
-VSCODE_READY=true  # Ensure container is ready for VS Code Remote Development
 
 # Display help message
 show_help() {
@@ -32,7 +31,6 @@ show_help() {
     echo "  -D, --detach           Run container in detached mode"
     echo "  -n, --no-attach        Don't automatically attach to detached containers"
     echo "  --clean                Stop and remove existing container before starting"
-    echo "  --no-vscode            Disable VS Code Remote Development optimizations"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
@@ -116,10 +114,6 @@ while [[ $# -gt 0 ]]; do
             CLEAN_START=true
             shift
             ;;
-        --no-vscode)
-            VSCODE_READY=false
-            shift
-            ;;
         -h|--help)
             show_help
             ;;
@@ -139,25 +133,17 @@ fi
 # Set the Docker image name
 IMAGE_NAME="osrf/ros:${ROS2_DISTRO}-desktop"
 
-# Outside of the container
-# Check if Ansible (for automation) and Terminator (for terminal management) are installed, if not install them..
-if (! command -v ansible &> /dev/null) \
-    || (! command -v terminator &> /dev/null) \
-    || (! command -v lxc-attach &> /dev/null) \
-    ; then
-    echo "Required tools not found. Installing tools..."
-    sudo apt update && sudo apt upgrade -y
-    sudo apt install -y ansible terminator lxc 
+# Check if Ansible is installed, if not install it
+if ! command -v ansible &> /dev/null; then
+    echo "Ansible not found. Installing Ansible..."
+    sudo apt update
+    sudo apt install -y ansible
     
-    if (! command -v ansible &> /dev/null) \
-        || (! command -v terminator &> /dev/null) \
-        || (! command -v lxc-attach &> /dev/null) \
-        ; then
-        echo "Required tools not found. Install tools:"
-        echo "sudo apt install -y ansible terminator lxc"
+    if ! command -v ansible &> /dev/null; then
+        echo "Failed to install Ansible. Please install it manually."
         exit 1
     fi
-    echo "Tools installed successfully."
+    echo "Ansible installed successfully."
 fi
 
 # Check if the Docker image exists
@@ -216,8 +202,8 @@ echo "Workspace directory: $WORKSPACE_DIR"
 echo "Note: You can safely ignore the 'groups: cannot find name for group ID' warning."
 
 # Check if container already exists
-CONTAINER_EXISTS=$(sudo docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
-CONTAINER_RUNNING=$(sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$")
+CONTAINER_EXISTS=$(sudo docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" || echo "")
+CONTAINER_RUNNING=$(sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" || echo "")
 
 # Clean start if requested
 if [ "$CLEAN_START" = true ] && [ -n "$CONTAINER_EXISTS" ]; then
@@ -232,11 +218,14 @@ fi
 
 # Determine if we should use --rm based on persistence option
 RM_OPTION=""
+RESTART_POLICY=""
 if [ "$PERSISTENT" = false ]; then
     # Only use --rm if not using restart=unless-stopped
     # The two options are incompatible
+    RM_OPTION="--rm"
     echo "Note: Container will automatically be removed when stopped (using --rm)"
 else
+    RESTART_POLICY="--restart=unless-stopped"
     echo "Container will be persistent (use 'docker rm $CONTAINER_NAME' to remove it later)"
 fi
 
@@ -311,14 +300,12 @@ else
         echo "Container will run in interactive mode"
     fi
 
-    xhost +local:root
-
     # Run the container
     sudo docker run $INTERACTIVE_OPTION $RM_OPTION \
         --name $CONTAINER_NAME \
         --network=host \
         --privileged \
-        --restart=unless-stopped \
+        $RESTART_POLICY \
         --detach-keys="ctrl-p,ctrl-q" \
         $GPU_OPTIONS \
         -v $XSOCK:$XSOCK:rw \
@@ -326,12 +313,9 @@ else
         -v "$WORKSPACE_DIR:/workspace:rw" \
         -v "$WORKSPACE_DIR:/projects:rw" \
         -v "$(dirname "$(readlink -f "$0")")/run-ros2-container-entrypoint.sh:/entrypoint.sh:ro" \
-        -v /var/run/docker.sock:/var/run/docker.sock:ro \
         -e DISPLAY=$DISPLAY \
         -e XAUTHORITY=$XAUTH \
         -e QT_X11_NO_MITSHM=1 \
-        $([ "$VSCODE_READY" = true ] && echo "-l com.microsoft.vscode.ready=true") \
-        $([ "$VSCODE_READY" = true ] && echo "-l com.microsoft.vscode.devcontainer=true") \
         $USER_OPTIONS \
         --entrypoint "/entrypoint.sh" \
         $IMAGE_NAME $ROS2_DISTRO "$CUSTOM_CMD"
@@ -413,7 +397,7 @@ if [ -n "$CONTAINER_STILL_RUNNING" ] || [ "$PERSISTENT" = true ] && [ "$STOP_REQ
     echo ""
     echo "Once attached to the container, you can use the following commands:"
     echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
-    echo "  - Press Ctrl+P Ctrl+Q: Standard Docker detach sequence"
+    echo "  - Press Ctrl+P followed by Ctrl+Q: Standard Docker detach sequence"
     echo "  - Type 'stop': Stop the container completely (container will shut down)"
     echo "  - Type 'container-help': Show detailed help message"
 echo ""
