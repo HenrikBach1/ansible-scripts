@@ -44,6 +44,32 @@ The robust containers are specifically designed to work reliably with VS Code, p
    - Install VS Code extensions directly inside the container
    - Use the integrated terminal to run ROS2 commands
 
+## Volume Mounts in Containers
+
+Our container scripts mount the workspace directory to multiple paths:
+
+- `/workspace`: The primary path for development work
+- `/projects`: An alternate path for compatibility with some VS Code extensions and tools
+- Container-specific paths:
+  - ROS2: `/home/ubuntu/ros2_ws`
+  - Yocto: `/workdir` and `/home/ubuntu/yocto_ws`
+
+These multiple mounts ensure maximum compatibility with different tools and workflows.
+
+### Fixing Missing Volume Mounts
+
+If you have existing containers created with older scripts that are missing the `/projects` mount, you can use the fix-container-volumes.sh script:
+
+```bash
+./fix-container-volumes.sh your_container_name
+```
+
+This script will:
+1. Create the `/projects` directory in the container
+2. Temporarily stop the container
+3. Recreate it with the proper volume mounts
+4. Preserve all other settings and configurations
+
 ## Using Docker Exec with the Container
 
 When you connect to the container using `docker exec -it ros2_container bash`, custom commands like `container-help` may not be available. Use the provided `docker-exec-it` script instead:

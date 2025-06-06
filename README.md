@@ -26,7 +26,10 @@ The robust scripts are recommended for environments where you need maximum stabi
 
 All development containers in this repository share these common features:
 
-- **Workspace Mounting**: Your project directories are mounted automatically
+- **Workspace Mounting**: Your project directories are mounted at multiple paths for compatibility:
+  - `/workspace`: The primary workspace path
+  - `/projects`: For compatibility with VS Code extensions
+  - Container-specific paths like `/home/ubuntu/ros2_ws` or `/workdir`
 - **Persistent by Default**: Container state is preserved between sessions
 - **VS Code Integration**: Remote development with VS Code
 - **Configuration Persistence**: Save and reuse container configurations

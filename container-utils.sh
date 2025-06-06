@@ -79,12 +79,12 @@ done
     
     # Special handling for different container types
     local additional_args=""
-    local mount_options="-v \"$workspace_dir:/home/ubuntu/${container_type}_ws\" -v \"$workspace_dir:/workspace\""
+    local mount_options="-v \"$workspace_dir:/home/ubuntu/${container_type}_ws\" -v \"$workspace_dir:/workspace\" -v \"$workspace_dir:/projects\""
     
     # Special handling for Yocto/CROPS container
     if [ "$container_type" = "yocto" ]; then
         # CROPS/poky uses /workdir instead of /workspace
-        mount_options="-v \"$workspace_dir:/workdir\" -v \"$workspace_dir:/workspace\""
+        mount_options="-v \"$workspace_dir:/workdir\" -v \"$workspace_dir:/workspace\" -v \"$workspace_dir:/projects\""
         additional_args="-e TEMPLATECONF=/workdir/meta-custom/conf/templates/default"
     fi
     
@@ -96,7 +96,7 @@ done
         $additional_args \
         --name \"$container_name\" \
         \"$image_name\" \
-        bash -c \"$env_setup_command && mkdir -p /workspace && echo '$KEEP_ALIVE_SCRIPT' > /home/ubuntu/keep_alive.sh && chmod +x /home/ubuntu/keep_alive.sh && nohup /home/ubuntu/keep_alive.sh >/dev/null 2>&1 & echo 'Container is running with keep-alive process' && sleep infinity\""
+        bash -c \"$env_setup_command && mkdir -p /workspace && mkdir -p /projects && echo '$KEEP_ALIVE_SCRIPT' > /home/ubuntu/keep_alive.sh && chmod +x /home/ubuntu/keep_alive.sh && nohup /home/ubuntu/keep_alive.sh >/dev/null 2>&1 & echo 'Container is running with keep-alive process' && sleep infinity\""
     
     # Execute the command
     eval $run_cmd
@@ -153,7 +153,7 @@ fix_container() {
     
     # Fix workspace directory and permissions
     echo "Fixing workspace directory..."
-    if ! docker exec "$container_name" bash -c "mkdir -p /workspace && chmod 777 /workspace" 2>/dev/null; then
+    if ! docker exec "$container_name" bash -c "mkdir -p /workspace && chmod 777 /workspace && mkdir -p /projects && chmod 777 /projects" 2>/dev/null; then
         echo "Failed to fix workspace directory."
         return 1
     fi
