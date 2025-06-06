@@ -1,0 +1,311 @@
+# file=yocto-in-docker-install.yml
+---
+# Import docker installation playbook
+- import_playbook: docker-install.yml
+
+- name: Setup Yocto Docker Environment
+  hosts: localhost
+  become: true
+  vars:
+    # Yocto release - Set to the desired version
+    # Available releases: https://wiki.yoctoproject.org/wiki/Releases
+    # 'kirkstone' is LTS until April 2026
+    # 'dunfell' is LTS until April 2024
+    # 'mickledore' is the latest release
+    yocto_release: kirkstone
+    # Set to false to enforce LTS versions only
+    allow_non_lts: false
+    # LTS releases list - used to validate release if allow_non_lts is false
+    yocto_lts_releases:
+      - kirkstone
+      - dunfell
+    # Only keep the selected release, remove others (even if they are LTS)
+    keep_only_selected_release: true
+    docker_image_name: "yocto_workspace"
+    use_prebuilt_image: false
+    # Additional tools for Yocto development
+    additional_tools:
+      - python3-pip
+      - git
+      - build-essential
+      - chrpath
+      - diffstat
+      - gawk
+      - texinfo
+      - wget
+      - curl
+      - vim
+      - nano
+      - locales
+      - cpio
+      - file
+      - iputils-ping
+      - python3-distutils
+      - python3-git
+      - python3-jinja2
+      - python3-pexpect
+      - pylint
+      - xz-utils
+      - debianutils
+      - iputils-ping
+      - python3-pip
+      - python3-pexpect
+      - python3-git
+      - python3-jinja2
+      - socat
+      - zstd
+      - liblz4-tool
+      - libssl-dev
+    workspace_dir: "/home/{{ lookup('env','USER') }}/yocto_ws"
+
+  tasks:
+    # Validate that the selected Yocto release is an LTS release
+    - name: Validate Yocto release is LTS
+      fail:
+        msg: "The selected Yocto release '{{ yocto_release }}' is not an LTS release. Please choose from: {{ yocto_lts_releases | join(', ') }} or set allow_non_lts to true."
+      when: not allow_non_lts | bool and yocto_release not in yocto_lts_releases
+
+    # Identify and remove non-LTS Yocto Docker images
+    - name: Get list of Docker images
+      command: docker images crops/poky --format "{% raw %}{{.Tag}}{% endraw %}"
+      register: docker_images
+      changed_when: false
+      become: false
+      failed_when: false
+      
+    - name: Get list of Docker images with sudo (fallback)
+      command: sudo docker images crops/poky --format "{% raw %}{{.Tag}}{% endraw %}"
+      register: docker_images_sudo
+      changed_when: false
+      when: docker_images.rc != 0
+      failed_when: false
+      
+    - name: Parse Docker image tags
+      set_fact:
+        yocto_image_tags: "{{ docker_images.stdout_lines | list }}"
+      when: docker_images.rc == 0
+      
+    - name: Parse Docker image tags (sudo)
+      set_fact:
+        yocto_image_tags: "{{ docker_images_sudo.stdout_lines | list }}"
+      when: docker_images.rc != 0 and docker_images_sudo.rc == 0
+      
+    - name: Debug image tags
+      debug:
+        msg: 
+          - "All Yocto image tags: {{ yocto_image_tags | default([]) }}"
+          - "Non-LTS images to remove: {{ yocto_image_tags | default([]) | difference(yocto_lts_releases) }}"
+          - "Other LTS images to remove: {{ yocto_image_tags | default([]) | difference([yocto_release]) | intersect(yocto_lts_releases) }}"
+          - "Docker command return code: {{ docker_images.rc }}"
+          - "Docker sudo command return code: {{ docker_images_sudo.rc | default('Not executed') }}"
+      when: (docker_images.rc == 0) or (docker_images_sudo.rc == 0)
+      
+    - name: Remove non-LTS Yocto Docker images
+      community.docker.docker_image:
+        name: "crops/poky:{{ item }}"
+        state: absent
+        force_absent: true
+      loop: "{{ yocto_image_tags | difference(yocto_lts_releases) }}"
+      when: not allow_non_lts | bool and docker_images.rc == 0
+      become: false
+      register: image_removal
+      ignore_errors: true
+      
+    - name: Remove other LTS Yocto Docker images (when keeping only selected release)
+      community.docker.docker_image:
+        name: "crops/poky:{{ item }}"
+        state: absent
+        force_absent: true
+      loop: "{{ yocto_image_tags | difference([yocto_release]) | intersect(yocto_lts_releases) }}"
+      when: keep_only_selected_release | bool and docker_images.rc == 0
+      become: false
+      register: lts_image_removal
+      ignore_errors: true
+      
+    - name: Remove non-LTS Yocto Docker images with sudo (fallback)
+      community.docker.docker_image:
+        name: "crops/poky:{{ item }}"
+        state: absent
+        force_absent: true
+      loop: "{{ yocto_image_tags | difference(yocto_lts_releases) }}"
+      when: not allow_non_lts | bool and ((docker_images.rc == 0 and image_removal is failed) or (docker_images.rc != 0 and docker_images_sudo.rc == 0))
+      become: true
+      register: sudo_image_removal
+      ignore_errors: true
+      
+    - name: Force remove non-LTS Yocto Docker images using docker CLI (last resort)
+      command: "sudo docker rmi -f crops/poky:{{ item }}"
+      loop: "{{ yocto_image_tags | difference(yocto_lts_releases) }}"
+      when: not allow_non_lts | bool and ((docker_images.rc == 0 or docker_images_sudo.rc == 0) and sudo_image_removal is failed)
+      ignore_errors: true
+      
+    - name: Remove other LTS Yocto Docker images with sudo (fallback)
+      community.docker.docker_image:
+        name: "crops/poky:{{ item }}"
+        state: absent
+        force_absent: true
+      loop: "{{ yocto_image_tags | difference([yocto_release]) | intersect(yocto_lts_releases) }}"
+      when: keep_only_selected_release | bool and ((docker_images.rc == 0 and lts_image_removal is failed) or (docker_images.rc != 0 and docker_images_sudo.rc == 0))
+      become: true
+      register: sudo_lts_image_removal
+      ignore_errors: true
+      
+    - name: Force remove other LTS Yocto Docker images using docker CLI (last resort)
+      command: "sudo docker rmi -f crops/poky:{{ item }}"
+      loop: "{{ yocto_image_tags | difference([yocto_release]) | intersect(yocto_lts_releases) }}"
+      when: keep_only_selected_release | bool and ((docker_images.rc == 0 or docker_images_sudo.rc == 0) and sudo_lts_image_removal is failed)
+      ignore_errors: true
+
+    # This step ensures Docker permissions are properly applied
+    - name: Apply docker group permissions immediately (for this session only)
+      shell: newgrp docker << EOF
+             exit
+             EOF
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Create Yocto workspace directory
+      file:
+        path: "{{ workspace_dir }}"
+        state: directory
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+
+    - name: Pull pre-built Yocto Docker image
+      community.docker.docker_image:
+        name: "crops/poky:{{ yocto_release }}"
+        source: pull
+      become: false
+      when: use_prebuilt_image | bool
+      register: docker_pull_result
+      ignore_errors: true
+      
+    - name: Pull pre-built Yocto Docker image with sudo (fallback)
+      community.docker.docker_image:
+        name: "crops/poky:{{ yocto_release }}"
+        source: pull
+      become: true
+      when: use_prebuilt_image | bool and docker_pull_result is failed
+
+    - name: Create Dockerfile for custom Yocto image
+      copy:
+        dest: "{{ workspace_dir }}/Dockerfile"
+        content: |
+          FROM crops/poky:{{ yocto_release }}
+          
+          # Set non-interactive mode for apt
+          ENV DEBIAN_FRONTEND=noninteractive
+          
+          # Install additional packages
+          RUN apt-get update && apt-get install -y \
+              {{ additional_tools | join(' \\\n              ') }} \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Create a non-root user with the same ID as the host user
+          RUN groupadd -g $(id -g) $(id -u -n) && \
+              useradd -u $(id -u) -g $(id -g) -m $(id -u -n)
+          
+          # Set up entrypoint
+          COPY entrypoint.sh /entrypoint.sh
+          RUN chmod +x /entrypoint.sh
+          
+          # Switch to the non-root user
+          USER $(id -u -n)
+          
+          # Create workspace
+          RUN mkdir -p /home/$(id -u -n)/yocto_ws/build
+          WORKDIR /home/$(id -u -n)/yocto_ws
+          
+          ENTRYPOINT ["/entrypoint.sh"]
+          CMD ["bash"]
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0644'
+      when: not use_prebuilt_image | bool
+
+    - name: Create entrypoint script
+      copy:
+        dest: "{{ workspace_dir }}/entrypoint.sh"
+        content: |
+          #!/bin/bash
+          set -e
+          
+          # Execute command passed to the container
+          exec "$@"
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+      when: not use_prebuilt_image | bool
+
+    - name: Build custom Yocto Docker image
+      community.docker.docker_image:
+        name: "{{ docker_image_name }}:{{ yocto_release }}"
+        build:
+          path: "{{ workspace_dir }}"
+          pull: yes
+        source: build
+      become: false
+      when: not use_prebuilt_image | bool
+
+    - name: Create convenience script to run Yocto container
+      copy:
+        dest: "{{ workspace_dir }}/run_yocto_docker.sh"
+        content: |
+          #!/bin/bash
+          
+          # Select the appropriate image based on configuration
+          IMAGE_NAME="{{ docker_image_name if not use_prebuilt_image else 'crops/poky' }}:{{ yocto_release }}"
+          
+          # Run the container with appropriate mounts
+          docker run -it --rm \
+            --privileged \
+            -v "{{ workspace_dir }}:/home/{{ lookup('env','USER') }}/yocto_ws" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -e DISPLAY \
+            -e TEMPLATECONF=/home/{{ lookup('env','USER') }}/yocto_ws/meta-custom/conf/templates/default \
+            --name yocto_container \
+            $IMAGE_NAME
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+
+    - name: Create .gitconfig template for container setup
+      copy:
+        dest: "{{ workspace_dir }}/.gitconfig.template"
+        content: |
+          [user]
+              name = {{ lookup('env','USER') }}
+              email = {{ lookup('env','USER') }}@example.com
+          [color]
+              ui = auto
+          [alias]
+              st = status
+              ci = commit
+              co = checkout
+              br = branch
+          [core]
+              editor = nano
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0644'
+
+    - name: Display completion message
+      debug:
+        msg: |
+          Yocto Docker setup complete!
+          
+          Yocto Release: {{ yocto_release }} {{ "(LTS)" if yocto_release in yocto_lts_releases else "(non-LTS)" }}
+          
+          To run the Yocto container:
+          $ cd {{ workspace_dir }}
+          $ ./run_yocto_docker.sh
+          
+          Inside the container, you can:
+          1. Initialize the build environment:
+             $ source poky/oe-init-build-env
+          
+          2. Start a build:
+             $ bitbake core-image-minimal
+          
+          Note: You may need to log out and log back in for group changes to take effect.
