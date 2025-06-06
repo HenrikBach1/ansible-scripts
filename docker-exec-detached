@@ -1,0 +1,22 @@
+#!/bin/bash
+# Enhanced docker exec script to ensure container stays running even with detached commands
+# Usage: ./docker-exec-detached <container_name> <command>
+
+# Source the container utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/container-utils.sh"
+
+# Check if a container name was provided
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <container_name> <command>"
+    echo "Runs a command in detached mode while ensuring the container stays running"
+    exit 1
+fi
+
+CONTAINER_NAME="$1"
+shift
+COMMAND="$@"
+
+# Use the common function to run detached commands
+run_detached_command "$CONTAINER_NAME" "$COMMAND"
+exit $?

@@ -1,13 +1,33 @@
 # VS Code Remote Container Access
 
-This guide explains how to connect to your ROS2 Docker container using VS Code Remote Containers.
+This guide explains how to connect to your Docker development containers using VS Code Remote Containers.
 
 ## Prerequisites
 
 1. Install Visual Studio Code: https://code.visualstudio.com/
-2. Install the "Remote - Containers" extension in VS Code
+2. Install the "Dev Containers" extension in VS Code (formerly "Remote - Containers")
 
-## Connection Steps
+## Using Robust Containers with VS Code (Recommended)
+
+For the most reliable VS Code remote development experience, we recommend using the robust container scripts:
+
+1. Create a robust container:
+   ```bash
+   # For ROS2
+   ./robust-ros2-container.sh --name my_ros2_dev
+
+   # For Yocto
+   ./robust-yocto-container.sh --name my_yocto_dev
+   ```
+
+2. In VS Code:
+   - Click the green "Remote" icon in the bottom-left corner
+   - Select "Dev Containers: Attach to Running Container..."
+   - Choose your container from the list
+
+The robust containers are specifically designed to work reliably with VS Code, preventing issues where containers might stop unexpectedly during development.
+
+## Connection Steps (Standard Containers)
 
 1. Make sure your ROS2 container is running:
    ```bash
@@ -78,6 +98,138 @@ If you don't see your container in the list:
 2. The container is automatically configured with labels for VS Code detection
 3. Try restarting VS Code if the container was recently started
 
+## Troubleshooting Container Reattachment
+
+If VS Code is unable to reattach to a container that was previously attached but has exited, use our helper script:
+
+```bash
+./restart-vscode-container.sh <container_name>
+```
+
+This script:
+1. Restarts the stopped container
+2. Ensures the keep-alive process is running
+3. Sets up the container in a state that VS Code can attach to
+
+After running the script, follow the standard connection steps above.
+
+### Common Issues and Solutions
+
+1. **"Failed to connect to container" error**:
+   - Run the restart-vscode-container.sh script
+   - Restart VS Code
+   - Make sure Docker is running properly on your host
+
+2. **Container exits immediately after restart**:
+   - This usually indicates a missing keep-alive process
+   - Our restart script handles this, but you can manually check:
+     ```bash
+     docker exec <container_name> ps aux | grep keep
+     ```
+
+3. **VS Code doesn't show the container in the list**:
+   - Refresh the containers list in VS Code
+   - Restart the Docker extension
+   - Run `docker ps` to verify the container is actually running
+
+For more detailed information about container lifecycle and detached commands, see [DETACHED_COMMANDS.md](DETACHED_COMMANDS.md).
+
+## Quick Recovery with recreate-ros2-container.sh
+
+If you're still having issues with VS Code attaching to the container, we've provided a simple recovery script:
+
+```bash
+./recreate-ros2-container.sh [--name container_name]
+```
+
+This script will:
+1. Stop and remove the existing container completely
+2. Create a fresh container using saved settings (if available)
+3. Ensure all the proper processes are running inside the container
+
+After running this script, you should be able to attach to the container from VS Code without any issues.
+
+## Comprehensive Container Fixing
+
+For the most thorough container repair, we've created a comprehensive fix script:
+
+```bash
+./fix-ros2-container.sh [--name container_name]
+```
+
+This script performs a complete check and repair of your container, fixing:
+- Workspace directory issues
+- Keep-alive process problems
+- Permission errors
+- Container lifecycle management
+
+If you're having persistent issues with VS Code not being able to connect to your container, run this script before trying to attach from VS Code again.
+
 ## Advanced Configuration
 
 For advanced VS Code configuration, you can create a `.devcontainer` folder in your project with custom settings.
+
+## Robust Container Creation for VS Code
+
+If you're experiencing persistent issues with VS Code not being able to connect to the container, or if the container keeps exiting, we've created a simplified script that creates a more robust container specifically designed for VS Code integration:
+
+```bash
+./create-robust-ros2-container.sh [--name container_name] [--workspace /path/to/workspace]
+```
+
+This script creates a container that:
+1. Uses a direct approach without complex entrypoint scripts
+2. Stays running reliably even after detaching
+3. Provides proper directory permissions for VS Code
+4. Has ROS2 properly sourced and ready to use
+
+After running this script, the container should remain running and be immediately available in VS Code's Remote Explorer.
+
+## Using Robust Containers for Troubleshooting
+
+The robust container scripts provide built-in fixing capabilities that can solve most common container issues:
+
+### Fixing Existing Containers
+
+```bash
+# Fix a ROS2 container
+./robust-ros2-container.sh --name my_ros2_dev --fix
+
+# Fix a Yocto container
+./robust-yocto-container.sh --name my_yocto_dev --fix
+```
+
+These commands will:
+1. Ensure the container is running
+2. Fix workspace directory issues
+3. Repair keep-alive processes
+4. Set proper permissions
+
+### Container Completely Unresponsive?
+
+If a container is completely unresponsive and can't be fixed, the easiest solution is to recreate it:
+
+```bash
+# For ROS2
+docker stop my_ros2_dev
+docker rm my_ros2_dev
+./robust-ros2-container.sh --name my_ros2_dev
+
+# For Yocto
+docker stop my_yocto_dev
+docker rm my_yocto_dev
+./robust-yocto-container.sh --name my_yocto_dev
+```
+
+The robust container scripts create containers that are more resilient to common issues that can cause VS Code Remote Development to fail.
+
+## Recommended Workflow
+
+For the best experience with VS Code Remote Development:
+
+1. Create containers using the robust scripts
+2. If issues occur, try the --fix option first
+3. If fixing fails, recreate the container
+4. Use the container-utils.sh functions for advanced operations
+
+This approach minimizes disruption to your development workflow and ensures maximum reliability when working with containers in VS Code.

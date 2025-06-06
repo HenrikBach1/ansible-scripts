@@ -2,6 +2,26 @@
 
 This repository contains Ansible scripts and supporting shell scripts for setting up and managing development environments in Docker containers.
 
+## Container Types
+
+This repository provides scripts for two types of development containers:
+
+1. **ROS2 Development Container**: A complete development environment for ROS2 with all necessary tools and libraries
+2. **Yocto Development Container**: A build environment for Yocto Project development using CROPS/poky
+
+## Container Scripts
+
+### Standard Scripts
+- `run-ros2-container.sh`: Standard ROS2 container runner
+- `run-yocto-container.sh`: Standard Yocto container runner
+
+### Robust Container Scripts
+For more reliable container lifecycle management, especially when using detached commands or VS Code:
+- `robust-ros2-container.sh`: Creates robust ROS2 containers with reliable keep-alive processes
+- `robust-yocto-container.sh`: Creates robust Yocto containers with reliable keep-alive processes
+
+The robust scripts are recommended for environments where you need maximum stability with VSCode remote development.
+
 ## Common Container Features
 
 All development containers in this repository share these common features:
@@ -9,6 +29,7 @@ All development containers in this repository share these common features:
 - **Workspace Mounting**: Your project directories are mounted automatically
 - **Persistent by Default**: Container state is preserved between sessions
 - **VS Code Integration**: Remote development with VS Code
+- **Configuration Persistence**: Save and reuse container configurations
 - **Container Commands**:
   - `detach`: Disconnect from the container while keeping it running
   - `stop`: Completely stop the container
@@ -78,13 +99,23 @@ This ensures that ROS2 commands work without manual sourcing in most scenarios.
 
 ## Yocto Development Environment
 
-The `run-yocto-container.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools and configuration for embedded Linux development.
+The `run-yocto-container.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools for embedded Linux development.
 
 ### Yocto-Specific Features:
 
-- **Pre-configured Environment**: Container comes with all necessary Yocto build dependencies
-- **Helper Functions**: Convenient functions for common Yocto operations
-- **LTS Release Support**: Uses Scarthgap (5.0, LTS until 2029) by default, with Kirkstone (4.0, LTS until 2026) also supported
+- **Build Environment**: Container provides all necessary tools to build Yocto Project
+- **CROPS/poky Base**: Uses the CROPS/poky container which provides a consistent build environment
+- **Ubuntu 22.04 Base**: Based on Ubuntu 22.04 for long-term stability
+
+### About CROPS/poky Container
+
+The CROPS (Cross Platform Open Source) poky container is a **build environment** that contains the necessary tools to build Yocto Project, but does **not** include the actual Poky source code. When you run the container, you will need to:
+
+1. Clone the Poky repository for your desired Yocto release (e.g., Scarthgap or Kirkstone)
+2. Initialize the build environment
+3. Build your Yocto images
+
+The container tags are based on the host Linux distribution (e.g., `ubuntu-22.04`, `fedora-40`).
 
 ### Yocto Basic Usage:
 
@@ -92,11 +123,11 @@ The `run-yocto-container.sh` script allows you to create and manage a Yocto Proj
 # Basic usage (runs bash shell in the container)
 ./run-yocto-container.sh
 
-# Run with a specific Yocto release
-./run-yocto-container.sh --release scarthgap
-
 # Create a container with a custom name
 ./run-yocto-container.sh --name my_yocto_dev
+
+# Create a container with a custom workspace directory
+./run-yocto-container.sh --workspace ~/my_yocto_workspace
 ```
 
 For detailed usage and all available options, run:
@@ -104,36 +135,184 @@ For detailed usage and all available options, run:
 ./run-yocto-container.sh --help
 ```
 
-### Yocto Helper Functions
-
-The Yocto container includes helper functions to simplify common tasks:
-
-- `yocto_init`: Initializes the Yocto build environment (wrapper for `source poky/oe-init-build-env`)
-- `yocto_build`: Builds a Yocto image (wrapper for `bitbake`)
-- `yocto_clean`: Cleans a Yocto package build (wrapper for `bitbake -c cleansstate`)
-- `yocto_status`: Displays current Yocto environment status
-
 ### Yocto Quick Start:
 
 ```bash
 # Inside the container:
-yocto_init
+# Clone the Poky repo for your desired release (e.g., scarthgap)
+git clone -b scarthgap git://git.yoctoproject.org/poky
+cd poky
+# Initialize build environment
+source oe-init-build-env
 # Edit conf/local.conf if needed
-yocto_build core-image-minimal
+bitbake core-image-minimal
 ```
 
 ### Yocto Release Information
 
-The following Yocto Project LTS releases are supported:
+The following Yocto Project LTS releases are recommended for development:
 
 | Release Name | Version | Support Status         | End of Life  |
 |--------------|---------|------------------------|--------------|
-| Scarthgap    | 5.0     | LTS - Default          | April 2029   |
+| Scarthgap    | 5.0     | LTS                    | April 2029   |
 | Kirkstone    | 4.0     | LTS                    | April 2026   |
 
-You can specify which release to use with the `--release` option:
+Note that the CROPS/poky container (e.g., `crops/poky:ubuntu-22.04`) only contains the build tools for Yocto, not Yocto itself. You'll need to clone the appropriate branch of Poky inside the container:
 
 ```bash
-# Use the Kirkstone LTS release
-./run-yocto-container.sh --release kirkstone
+# Inside the container, clone the specific branch you want to work with:
+git clone -b scarthgap git://git.yoctoproject.org/poky
+# OR
+git clone -b kirkstone git://git.yoctoproject.org/poky
 ```
+
+## Configuration Persistence
+
+The scripts now support saving and reusing container configurations. This feature allows you to define your preferred settings once and reuse them in future sessions.
+
+### Saving Configurations
+
+To save your current container configuration:
+
+```bash
+# Save ROS2 container configuration
+./run-ros2-container.sh --name my_ros2_dev --workspace ~/my_ros2_projects --gpu --save-config
+
+# Save Yocto container configuration
+./run-yocto-container.sh --name my_yocto_dev --workspace ~/my_yocto_projects --save-config
+```
+
+### Reusing Configurations
+
+Once saved, you can reuse your configuration by simply specifying the container name:
+
+```bash
+# Use saved ROS2 configuration
+./run-ros2-container.sh --name my_ros2_dev
+
+# Use saved Yocto configuration
+./run-yocto-container.sh --name my_yocto_dev
+```
+
+### Listing Saved Configurations
+
+To view all saved configurations:
+
+```bash
+./run-ros2-container.sh --list-configs
+# or
+./run-yocto-container.sh --list-configs
+```
+
+### Reproducing Containers with Original Arguments
+
+When listing configurations with `--list-configs`, you'll see the original command-line arguments that were used to create each container. This allows you to easily reproduce a container setup exactly as it was originally configured:
+
+```bash
+$ ./run-ros2-container.sh --list-configs
+Saved container configurations:
+  - test_container (ros2 jazzy) - Last used: 2025-06-06 15:31:46
+    Original command: ros2-container.sh --name test_container --distro jazzy --gpu
+```
+
+You can copy the original command and run it again to create a container with identical settings.
+
+### Configuration Storage
+
+Configurations are stored in `~/.config/iac-scripts/` and are organized by container name. Each configuration stores:
+
+- Environment type (ROS2, Yocto)
+- Environment version (for ROS2 distros)
+- Workspace directory
+- GPU support setting
+- Custom command
+- Persistence setting
+- User mode (root or non-root)
+- Detach mode
+- Auto-attach setting
+- Image name
+- Additional arguments
+- Original command-line arguments used to create the container
+
+The original command-line arguments are particularly useful if you want to recreate a container with exactly the same options.
+
+### Managing Configurations
+
+The scripts provide several options for managing saved configurations:
+
+```bash
+# List all saved configurations
+./run-ros2-container.sh --list-configs
+
+# Show detailed configuration for a specific container
+./run-ros2-container.sh --show-config my_ros2_dev
+
+# Show configurations for all running containers
+./run-ros2-container.sh --show-running
+
+# Remove a specific configuration
+./run-ros2-container.sh --remove-config old_container
+
+# Clean up configurations not used in the last 30 days
+./run-ros2-container.sh --cleanup-configs
+
+# Clean up configurations not used in the last 60 days
+./run-ros2-container.sh --cleanup-configs 60
+```
+
+## Using Robust Container Scripts
+
+For development environments that require maximum stability, especially when working with VSCode Remote Development or using detached commands, the robust container scripts provide enhanced reliability.
+
+### Creating Robust ROS2 Containers
+
+```bash
+# Create a robust ROS2 container with default settings
+./robust-ros2-container.sh
+
+# Create a container with custom name and workspace
+./robust-ros2-container.sh --name my_ros2_dev --workspace /path/to/workspace
+
+# Create a container with specific ROS2 distribution
+./robust-ros2-container.sh --name humble_dev --distro humble
+
+# Fix an existing container that might have issues
+./robust-ros2-container.sh --name my_ros2_dev --fix
+```
+
+### Creating Robust Yocto Containers
+
+```bash
+# Create a robust Yocto container with default settings
+./robust-yocto-container.sh
+
+# Create a container with custom name and workspace
+./robust-yocto-container.sh --name my_yocto_dev --workspace /path/to/workspace
+
+# Create a container with specific base image version
+./robust-yocto-container.sh --name my_yocto_dev --base debian-11
+
+# Fix an existing container that might have issues
+./robust-yocto-container.sh --name my_yocto_dev --fix
+
+# Run a detached command in the container
+./robust-yocto-container.sh --name my_yocto_dev --command "git clone -b kirkstone git://git.yoctoproject.org/poky"
+```
+
+### Benefits of Robust Containers
+
+The robust container scripts provide these key advantages:
+
+1. **Resilient Keep-Alive Process**: Multiple keep-alive mechanisms ensure containers don't unexpectedly stop
+2. **Simplified Creation**: One-step creation of properly configured containers
+3. **Consistency**: Same behavior and interface for both ROS2 and Yocto containers
+4. **Easily Fixable**: Simple commands to fix containers that have become unstable
+5. **Self-Healing**: Automatically fix keep-alive processes before running detached commands
+6. **VS Code Friendly**: Optimized for use with VS Code Remote Development
+
+If you encounter issues with containers stopping unexpectedly when using VS Code Remote Development or running detached commands, the robust container scripts are the recommended solution.
+
+## Additional Documentation
+
+* [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md) - Instructions for accessing containers from Visual Studio Code
+* [DETACHED_COMMANDS.md](DETACHED_COMMANDS.md) - Information about running detached commands and troubleshooting container lifecycle issues

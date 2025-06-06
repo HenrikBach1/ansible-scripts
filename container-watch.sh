@@ -61,7 +61,38 @@ while true; do
         if ! sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" &>/dev/null; then
             echo "Container $CONTAINER_NAME stopped after detach, restarting it..."
             sudo docker start "$CONTAINER_NAME"
+            
+            # Restart the keep-alive script inside the container to ensure it's still running
+            sudo docker exec "$CONTAINER_NAME" bash -c '
+                if [ -f /home/ubuntu/keep_container_alive.sh ]; then
+                    # Check if the keep-alive process is running
+                    if ! pgrep -f "keep_container_alive.sh" >/dev/null; then
+                        # If not running, start it again
+                        nohup /home/ubuntu/keep_container_alive.sh >/dev/null 2>&1 &
+                        echo "Restarted keep-alive process"
+                    fi
+                fi
+            ' || true
+            
             echo "Container $CONTAINER_NAME restarted and is now running in the background."
+        fi
+    fi
+    
+    # Periodically ensure the keep-alive process is running (every 10 cycles)
+    if [ $((SECONDS % 10)) -eq 0 ]; then
+        # Only execute if the container is running
+        if sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" &>/dev/null; then
+            # Execute quietly to avoid too much output
+            sudo docker exec "$CONTAINER_NAME" bash -c '
+                if [ -f /home/ubuntu/keep_container_alive.sh ]; then
+                    # Check if the keep-alive process is running
+                    if ! pgrep -f "keep_container_alive.sh" >/dev/null; then
+                        # If not running, start it again
+                        nohup /home/ubuntu/keep_container_alive.sh >/dev/null 2>&1 &
+                        echo "Restarted keep-alive process after detection by watcher"
+                    fi
+                fi
+            ' >/dev/null 2>&1 || true
         fi
     fi
     

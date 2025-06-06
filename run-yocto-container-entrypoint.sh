@@ -34,12 +34,19 @@ echo ""
 echo "Yocto Container Commands:"
 echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
 echo "  - Type 'stop': Stop the container completely (container will shut down)"
+echo "  - Type 'yocto_init': Helper to clone and set up Yocto automatically"
 echo "  - Press Ctrl+P followed by Ctrl+Q: Standard Docker detach sequence"
 echo "  - Ctrl+D: Standard shell exit (in most cases will detach instead of stopping)"
 echo ""
+echo "Yocto Release Target: $YOCTO_RELEASE"
+echo "NOTE: This is a CROPS/poky build environment container that contains the tools"
+echo "      needed to build Yocto, but DOES NOT include the Poky/Yocto source code."
+echo "      You need to clone the Poky repository with the branch/tag for $YOCTO_RELEASE."
+echo ""
 echo "Yocto Quick Start:"
-echo "  1. Initialize build environment: source poky/oe-init-build-env"
-echo "  2. Start a build: bitbake core-image-minimal"
+echo "  1. Clone Poky: git clone -b $YOCTO_RELEASE git://git.yoctoproject.org/poky"
+echo "  2. Initialize build environment: source poky/oe-init-build-env"
+echo "  3. Start a build: bitbake core-image-minimal"
 echo ""
 
 # Create a bin directory in the user's home
@@ -92,6 +99,22 @@ stop() {
 
 # Define helper functions for Yocto
 yocto_init() {
+    if [ ! -d "poky" ]; then
+        echo "Poky directory not found. Do you want to clone it? (y/n)"
+        read -r response
+        if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+            echo "Cloning Yocto Poky repository (branch: $YOCTO_RELEASE)..."
+            git clone -b "$YOCTO_RELEASE" git://git.yoctoproject.org/poky
+            if [ $? -ne 0 ]; then
+                echo "Failed to clone Poky repository. Please check your network connection and the branch name."
+                return 1
+            fi
+        else
+            echo "Poky directory is required for Yocto development."
+            return 1
+        fi
+    fi
+    
     echo "Initializing Yocto build environment..."
     source poky/oe-init-build-env "$@"
 }
@@ -117,26 +140,30 @@ yocto_clean() {
 }
 
 yocto_status() {
+    echo "Yocto Environment Status:"
+    echo "------------------------"
+    echo "Yocto Release: $YOCTO_RELEASE"
+    echo "Workspace: $(pwd)"
+    
     if [ -d "poky" ]; then
-        echo "Yocto Environment Status:"
-        echo "------------------------"
-        echo "Yocto Release: $YOCTO_RELEASE"
-        echo "Workspace: $(pwd)"
-        if [ -d "build" ]; then
-            echo "Build directory exists: Yes"
-        else
-            echo "Build directory exists: No"
-        fi
-        
-        if [ -f "build/conf/local.conf" ]; then
-            echo "Configuration exists: Yes"
-            echo "Machine: $(grep "^MACHINE " build/conf/local.conf | cut -d'"' -f2)"
-            echo "Distro: $(grep "^DISTRO " build/conf/local.conf | cut -d'"' -f2)"
-        else
-            echo "Configuration exists: No"
-        fi
+        echo "Poky directory exists: Yes"
+        echo "Poky branch: $(cd poky && git branch --show-current)"
     else
-        echo "Not in a Yocto workspace."
+        echo "Poky directory exists: No (run 'yocto_init' to set up)"
+    fi
+    
+    if [ -d "build" ]; then
+        echo "Build directory exists: Yes"
+    else
+        echo "Build directory exists: No"
+    fi
+    
+    if [ -f "build/conf/local.conf" ]; then
+        echo "Configuration exists: Yes"
+        echo "Machine: $(grep "^MACHINE " build/conf/local.conf | cut -d'"' -f2)"
+        echo "Distro: $(grep "^DISTRO " build/conf/local.conf | cut -d'"' -f2)"
+    else
+        echo "Configuration exists: No"
     fi
 }
 

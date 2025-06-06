@@ -7,11 +7,15 @@
   hosts: localhost
   become: true
   vars:
-    # Yocto release - Set to the desired version
+    # Yocto release - Set to the desired version for development inside the container
     # Available releases: https://wiki.yoctoproject.org/wiki/Releases
     # 'scarthgap' (5.0) is LTS until April 2029
     # 'kirkstone' (4.0) is LTS until April 2026
     yocto_release: scarthgap
+    # Container base OS - CROPS/poky uses distro names as tags, NOT Yocto release names
+    # CROPS/poky is a build environment with tools to build Yocto, not Yocto itself
+    # Available tags: ubuntu-22.04, ubuntu-20.04, debian-11, fedora-40, etc.
+    container_base: ubuntu-22.04
     # Set to false to enforce LTS versions only
     allow_non_lts: false
     # LTS releases list - used to validate release if allow_non_lts is false
@@ -191,7 +195,7 @@
       copy:
         dest: "{{ workspace_dir }}/Dockerfile"
         content: |
-          FROM crops/poky:{{ yocto_release }}
+          FROM crops/poky:{{ container_base }}
           
           # Set non-interactive mode for apt
           ENV DEBIAN_FRONTEND=noninteractive
@@ -208,6 +212,9 @@
           # Set up entrypoint
           COPY entrypoint.sh /entrypoint.sh
           RUN chmod +x /entrypoint.sh
+          
+          # Set Yocto release environment variable
+          ENV YOCTO_RELEASE="{{ yocto_release }}"
           
           # Switch to the non-root user
           USER $(id -u -n)
@@ -254,7 +261,7 @@
           #!/bin/bash
           
           # Select the appropriate image based on configuration
-          IMAGE_NAME="{{ docker_image_name if not use_prebuilt_image else 'crops/poky' }}:{{ yocto_release }}"
+          IMAGE_NAME="{{ docker_image_name if not use_prebuilt_image else 'crops/poky' }}:{{ yocto_release if not use_prebuilt_image else container_base }}"
           
           # Run the container with appropriate mounts
           docker run -it --rm \
@@ -262,9 +269,10 @@
             -v "{{ workspace_dir }}:/home/{{ lookup('env','USER') }}/yocto_ws" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -e DISPLAY \
+            -e YOCTO_RELEASE="{{ yocto_release }}" \
             -e TEMPLATECONF=/home/{{ lookup('env','USER') }}/yocto_ws/meta-custom/conf/templates/default \
             --name yocto_container \
-            $IMAGE_NAME
+            $IMAGE_NAME "{{ yocto_release }}"
         owner: "{{ lookup('env','USER') }}"
         group: "{{ lookup('env','USER') }}"
         mode: '0755'

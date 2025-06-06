@@ -3,6 +3,10 @@
 # This script is called by environment-specific scripts like run-ros2-container.sh and run-yocto-container.sh
 file=run-container-common.sh
 
+# Source the configuration management system
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/container-config.sh"
+
 # Function to display help
 show_container_help() {
     local ENV_TYPE="$1"
@@ -14,7 +18,9 @@ show_container_help() {
     echo "Run a ${ENV_TYPE} Docker container with appropriate settings"
     echo ""
     echo "Options:"
-    echo "  -d, --${ENV_VERSION_PARAM} ${ENV_VERSION_PARAM^^}  ${ENV_TYPE} ${ENV_VERSION_PARAM} (default: ${ENV_VERSION_DEFAULT})"
+    if [ "${ENV_TYPE,,}" = "ros2" ]; then
+        echo "  -d, --${ENV_VERSION_PARAM} ${ENV_VERSION_PARAM^^}  ${ENV_TYPE} ${ENV_VERSION_PARAM} (default: ${ENV_VERSION_DEFAULT})"
+    fi
     echo "  -n, --name NAME        Container name (default: ${ENV_TYPE}_container)"
     echo "  -w, --workspace DIR    Host workspace directory (default: ${WORKSPACE_DIR_DEFAULT})"
     echo "  -g, --gpu              Enable NVIDIA GPU support (if available)"
@@ -24,15 +30,23 @@ show_container_help() {
     echo "  -D, --detach           Run container in detached mode"
     echo "  --no-attach            Don't automatically attach to detached containers"
     echo "  --clean                Stop and remove existing container before starting"
+    echo "  --save-config          Save current configuration for future use"
+    echo "  --list-configs         List all saved container configurations"
+    echo "  --show-config NAME     Show detailed configuration for a specific container"
+    echo "  --show-running         Show configurations for all running containers"
+    echo "  --remove-config NAME   Remove a saved container configuration"
+    echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
     echo "  # Basic usage (runs bash shell in the container)"
     echo "  $0"
     echo ""
-    echo "  # Run with a specific ${ENV_TYPE} ${ENV_VERSION_PARAM}"
-    echo "  $0 --${ENV_VERSION_PARAM} ${ENV_VERSION_DEFAULT}"
-    echo ""
+    if [ "${ENV_TYPE,,}" = "ros2" ]; then
+        echo "  # Run with a specific ${ENV_TYPE} ${ENV_VERSION_PARAM}"
+        echo "  $0 --${ENV_VERSION_PARAM} ${ENV_VERSION_DEFAULT}"
+        echo ""
+    fi
     echo "  # Create a container with a custom name"
     echo "  $0 --name my_${ENV_TYPE}_dev"
     echo ""
@@ -41,6 +55,9 @@ show_container_help() {
     echo ""
     echo "  # Clean start (stop and remove existing container first)"
     echo "  $0 --clean"
+    echo ""
+    echo "  # Save current configuration for future use"
+    echo "  $0 --save-config"
     echo ""
     echo "Note: To reattach to a detached container:"
     echo "  - Run: docker attach \${CONTAINER_NAME}"
@@ -69,6 +86,23 @@ run_container() {
     local CUSTOM_CMD="${12}"
     local ADDITIONAL_ARGS="${13}"
     local ENTRYPOINT_SCRIPT="${14}"
+    local SAVE_CONFIG="${15}"
+    local ORIGINAL_ARGS="${16}"
+    
+    # If save config is requested, save all configurations
+    if [ "$SAVE_CONFIG" = true ]; then
+        echo "Saving configuration for container $CONTAINER_NAME..."
+        save_all_container_configs "$CONTAINER_NAME" "$ENV_TYPE" "$ENV_VERSION" "$WORKSPACE_DIR" \
+            "$GPU_SUPPORT" "$CUSTOM_CMD" "$PERSISTENT" "$RUN_AS_ROOT" "$DETACH_MODE" \
+            "$AUTO_ATTACH" "$IMAGE_NAME" "$ADDITIONAL_ARGS"
+        
+        # Save original arguments if provided
+        if [ -n "$ORIGINAL_ARGS" ]; then
+            save_original_args "$CONTAINER_NAME" "$ORIGINAL_ARGS"
+        fi
+        
+        echo "Configuration saved. You can use these settings in the future by running with --name $CONTAINER_NAME"
+    fi
     
     # Create workspace directory if it doesn't exist
     mkdir -p "$WORKSPACE_DIR"
@@ -142,26 +176,39 @@ run_container() {
     fi
 
     # Entrypoint command
-    ENTRYPOINT_CMD=""
+    ENTRYPOINT_ARGS=""
     if [ -n "$ENTRYPOINT_SCRIPT" ] && [ -f "$ENTRYPOINT_SCRIPT" ]; then
         echo "Using custom entrypoint script: $ENTRYPOINT_SCRIPT"
-        ENTRYPOINT_CMD="--entrypoint $ENTRYPOINT_SCRIPT"
+        # Instead of trying to use the host script as the entrypoint directly,
+        # mount it into the container and execute it from there
+        ENTRYPOINT_MOUNT="-v $ENTRYPOINT_SCRIPT:/home/$(id -u)/entrypoint.sh"
+        # Make sure the script is executable
+        chmod +x "$ENTRYPOINT_SCRIPT" || true
+        # Run the entrypoint script as the first command
+        ENTRYPOINT_ARGS="/home/$(id -u)/entrypoint.sh $ENV_VERSION"
     fi
 
     # Run the container with appropriate options
     echo "Starting ${ENV_TYPE} container with ${ENV_VERSION}..."
+
+    # Create workspace directory if it doesn't exist
+    mkdir -p "$WORKSPACE_DIR"
+    
+    # Fix permissions to ensure container can write to it
+    chmod 777 "$WORKSPACE_DIR" || true
 
     docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
         $USER_OPTIONS \
         --privileged \
         --network=host \
         -v "$WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws" \
+        -v "$WORKSPACE_DIR:/workspace" \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         -e DISPLAY \
         $ADDITIONAL_ARGS \
+        $ENTRYPOINT_MOUNT \
         --name "$CONTAINER_NAME" \
-        $ENTRYPOINT_CMD \
-        "$IMAGE_NAME" $ENV_VERSION "$CUSTOM_CMD"
+        "$IMAGE_NAME" $ENTRYPOINT_ARGS $CUSTOM_CMD
 
     # If running in detach mode but auto-attach is true, attach to the container
     if [ "$DETACH_MODE" = true ] && [ "$AUTO_ATTACH" = true ]; then

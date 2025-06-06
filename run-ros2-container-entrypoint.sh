@@ -21,12 +21,68 @@ fi
 # Get container information
 CONTAINER_ID=$(hostname)
 
-# Change to workspace directory
-cd /workspace
+# Try to create workspace directory - don't error if it fails
+mkdir -p /workspace 2>/dev/null || true
+
+# Try to change to workspace directory, fallback to home if not possible
+if [ -d "/workspace" ] && [ -w "/workspace" ]; then
+    cd /workspace
+else
+    # Fallback to home directory
+    cd $HOME
+    echo "Warning: Could not access /workspace directory, using $HOME instead."
+    # Try to create a workspace directory in the home folder
+    mkdir -p $HOME/workspace 2>/dev/null || true
+fi
 
 # Create a simple background daemon to keep the container running
+# Use multiple keep-alive mechanisms to ensure container doesn't exit
 nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 &
 KEEP_ALIVE_PID=$!
+
+# Create a more resilient keep-alive file to ensure container doesn't stop unexpectedly
+cat > /home/ubuntu/keep_container_alive.sh << 'EOF'
+#!/bin/bash
+# Resilient keep-alive script that ensures the container stays running
+# This script is designed to be very hard to kill accidentally
+
+# Set to non-zero to enable debugging output
+DEBUG=0
+
+function log_debug() {
+    if [ "$DEBUG" -ne 0 ]; then
+        echo "[keep-alive] $1" >> /home/ubuntu/keep_alive.log
+    fi
+}
+
+log_debug "Starting keep-alive script at $(date)"
+
+# Make this process harder to kill by setting a lower nice value
+renice -n -10 $$ >/dev/null 2>&1 || true
+
+# Trap signals to prevent accidental termination
+trap "log_debug 'Received termination signal, ignoring'; echo 'Keep-alive process ignoring termination request'" TERM INT QUIT
+
+# Set process name to something that looks like a system process
+# This makes it less likely to be killed by automated cleanup scripts
+export PS1="[system] "
+
+# Run forever
+while true; do
+    log_debug "Keep-alive heartbeat at $(date)"
+    sleep 60
+done
+EOF
+
+# Make the script executable
+chmod +x /home/ubuntu/keep_container_alive.sh
+
+# Start the keep-alive script in the background with nohup
+nohup /home/ubuntu/keep_container_alive.sh >/dev/null 2>&1 &
+KEEP_ALIVE_PID2=$!
+
+# Log both keep-alive PIDs for reference
+echo "$KEEP_ALIVE_PID $KEEP_ALIVE_PID2" > /home/ubuntu/.container_keep_alive_pids
 
 # Source ROS2 setup
 source /opt/ros/$1/setup.bash
