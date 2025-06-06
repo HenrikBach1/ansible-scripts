@@ -10,15 +10,14 @@
     # Yocto release - Set to the desired version
     # Available releases: https://wiki.yoctoproject.org/wiki/Releases
     # 'kirkstone' is LTS until April 2026
-    # 'dunfell' is LTS until April 2024
-    # 'mickledore' is the latest release
+    # 'scarthgap' is the current standard release (as of 2025)
+    # 'mickledore' and 'nanbield' are previous standard releases
     yocto_release: kirkstone
     # Set to false to enforce LTS versions only
     allow_non_lts: false
     # LTS releases list - used to validate release if allow_non_lts is false
     yocto_lts_releases:
       - kirkstone
-      - dunfell
     # Only keep the selected release, remove others (even if they are LTS)
     keep_only_selected_release: true
     docker_image_name: "yocto_workspace"

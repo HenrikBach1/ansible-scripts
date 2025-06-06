@@ -7,7 +7,7 @@ This repository contains Ansible scripts and supporting shell scripts for settin
 All development containers in this repository share these common features:
 
 - **Workspace Mounting**: Your project directories are mounted automatically
-- **Persistence**: Container state is preserved between sessions
+- **Persistent by Default**: Container state is preserved between sessions
 - **VS Code Integration**: Remote development with VS Code
 - **Container Commands**:
   - `detach`: Disconnect from the container while keeping it running
@@ -45,8 +45,8 @@ The `run-ros2-container.sh` script allows you to create and manage a ROS2 Docker
 # Run with a specific ROS2 distribution
 ./run-ros2-container.sh --distro iron
 
-# Create a persistent container with GPU support
-./run-ros2-container.sh --persistent --gpu --name my_ros2_dev
+# Create a container with GPU support and custom name
+./run-ros2-container.sh --gpu --name my_ros2_dev
 ```
 
 For detailed usage and all available options, run:
@@ -90,10 +90,10 @@ The `run-yocto-container.sh` script allows you to create and manage a Yocto Proj
 ./run-yocto-container.sh
 
 # Run with a specific Yocto release
-./run-yocto-container.sh --release dunfell
+./run-yocto-container.sh --release kirkstone
 
-# Create a persistent container
-./run-yocto-container.sh --persistent --name my_yocto_dev
+# Create a container with a custom name
+./run-yocto-container.sh --name my_yocto_dev
 ```
 
 For detailed usage and all available options, run:

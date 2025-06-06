@@ -9,7 +9,7 @@ CONTAINER_NAME="ros2_container"
 WORKSPACE_DIR="$HOME/projects"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
-PERSISTENT=false
+PERSISTENT=true
 RUN_AS_ROOT=false
 DETACH_MODE=false
 AUTO_ATTACH=true
@@ -26,7 +26,7 @@ show_help() {
     echo "  -w, --workspace DIR    Host workspace directory (default: $HOME/projects)"
     echo "  -g, --gpu              Enable NVIDIA GPU support (if available)"
     echo "  -c, --cmd CMD          Command to run in container (default: bash)"
-    echo "  -p, --persistent       Keep container after exit (don't use --rm)"
+    echo "  -p, --persistent       Keep container after exit (enabled by default)"
     echo "  -r, --root             Run container as root user instead of current user"
     echo "  -D, --detach           Run container in detached mode"
     echo "  -n, --no-attach        Don't automatically attach to detached containers"
