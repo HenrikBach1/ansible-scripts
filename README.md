@@ -84,6 +84,7 @@ The `run-yocto-container.sh` script allows you to create and manage a Yocto Proj
 
 - **Pre-configured Environment**: Container comes with all necessary Yocto build dependencies
 - **Helper Functions**: Convenient functions for common Yocto operations
+- **LTS Release Support**: Uses Scarthgap (5.0, LTS until 2029) by default, with Kirkstone (4.0, LTS until 2026) also supported
 
 ### Yocto Basic Usage:
 
@@ -92,7 +93,7 @@ The `run-yocto-container.sh` script allows you to create and manage a Yocto Proj
 ./run-yocto-container.sh
 
 # Run with a specific Yocto release
-./run-yocto-container.sh --release kirkstone
+./run-yocto-container.sh --release scarthgap
 
 # Create a container with a custom name
 ./run-yocto-container.sh --name my_yocto_dev
@@ -119,4 +120,20 @@ The Yocto container includes helper functions to simplify common tasks:
 yocto_init
 # Edit conf/local.conf if needed
 yocto_build core-image-minimal
+```
+
+### Yocto Release Information
+
+The following Yocto Project LTS releases are supported:
+
+| Release Name | Version | Support Status         | End of Life  |
+|--------------|---------|------------------------|--------------|
+| Scarthgap    | 5.0     | LTS - Default          | April 2029   |
+| Kirkstone    | 4.0     | LTS                    | April 2026   |
+
+You can specify which release to use with the `--release` option:
+
+```bash
+# Use the Kirkstone LTS release
+./run-yocto-container.sh --release kirkstone
 ```

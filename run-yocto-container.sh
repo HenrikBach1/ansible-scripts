@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/run-container-common.sh"
 
 # Default values
 ENV_TYPE="yocto"
-YOCTO_RELEASE="kirkstone"
+YOCTO_RELEASE="scarthgap"
 CONTAINER_NAME="yocto_container"
 WORKSPACE_DIR="$HOME/yocto_ws"
 GPU_SUPPORT=false
