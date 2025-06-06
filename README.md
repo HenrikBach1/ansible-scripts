@@ -13,6 +13,8 @@ All development containers in this repository share these common features:
   - `detach`: Disconnect from the container while keeping it running
   - `stop`: Completely stop the container
 
+These features are implemented through a shared script (`run-container-common.sh`) that is used by the environment-specific container scripts. This modular approach reduces code duplication and ensures consistent behavior across different development environments.
+
 For detailed information on connecting to containers using VS Code, see [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md).
 
 ### Benefits of VS Code Remote Development:
