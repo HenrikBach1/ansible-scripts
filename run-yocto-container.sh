@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to run a Yocto Docker container with appropriate settings
-file=run-yocto-container.sh
+file=start-yocto-container.sh
 echo "Running script: $file"
 
 # Store original arguments
@@ -199,7 +199,7 @@ docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     -e DISPLAY \
     $ADDITIONAL_ARGS \
     --name "$CONTAINER_NAME" \
-    "$IMAGE_NAME" $USER_OPTIONS bash -c "cd /workdir && echo 'Yocto Development Environment' && echo '-------------------------' && echo 'Container Base Image: $IMAGE_NAME' && echo '' && echo 'This is a CROPS/poky build environment container for Yocto development.' && echo 'It provides the tools needed to build Yocto but does not include Poky source code.' && echo '' && echo 'To get started:' && echo '1. Clone Poky with your desired version:' && echo '   git clone -b <branch-name> git://git.yoctoproject.org/poky' && echo '   (Examples: scarthgap, kirkstone, langdale, etc.)' && echo '2. Initialize: source poky/oe-init-build-env' && echo '3. Build: bitbake core-image-minimal' && echo '' && echo '4. Enter the environment: ./run-yocto-container.sh --name <container-name> --workspace <workspace-dir>' && echo '' && bash"
+    "$IMAGE_NAME" $USER_OPTIONS bash -c "cd /workdir && echo 'Yocto Development Environment' && echo '-------------------------' && echo 'Container Base Image: $IMAGE_NAME' && echo '' && echo 'This is a CROPS/poky build environment container for Yocto development.' && echo 'It provides the tools needed to build Yocto but does not include Poky source code.' && echo '' && echo 'To get started:' && echo '1. Clone Poky with your desired version:' && echo '   git clone -b <branch-name> git://git.yoctoproject.org/poky' && echo '   (Examples: scarthgap, kirkstone, langdale, etc.)' && echo '2. Initialize: source poky/oe-init-build-env' && echo '3. Build: bitbake core-image-minimal' && echo '' && echo '4. Enter the environment: ./start-yocto-container.sh --name <container-name> --workspace <workspace-dir>' && echo '' && bash"
 
 # Start the container watcher in the background if this is a persistent container
 if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then

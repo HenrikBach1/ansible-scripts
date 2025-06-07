@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to run a ROS2 Docker container with X11 forwarding
-file=run-ros2-container.sh
+file=start-ros2-container.sh
 echo "Running script: $file"
 
 # Store original arguments

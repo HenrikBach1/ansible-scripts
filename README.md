@@ -12,8 +12,8 @@ This repository provides scripts for two types of development containers:
 ## Container Scripts
 
 ### Standard Scripts
-- `run-ros2-container.sh`: Standard ROS2 container runner
-- `run-yocto-container.sh`: Standard Yocto container runner
+- `start-ros2-container.sh`: Standard ROS2 container runner
+- `start-yocto-container.sh`: Standard Yocto container runner
 
 ### Robust Container Scripts
 For more reliable container lifecycle management, especially when using detached commands or VS Code:
@@ -54,7 +54,7 @@ By default, all containers are set up to be discoverable by VS Code's Remote - C
 
 ## ROS2 Development Environment
 
-The `run-ros2-container.sh` script allows you to create and manage a ROS2 Docker container with X11 forwarding, GPU support, and other useful features.
+The `start-ros2-container.sh` script allows you to create and manage a ROS2 Docker container with X11 forwarding, GPU support, and other useful features.
 
 ### ROS2-Specific Features:
 
@@ -66,18 +66,18 @@ The `run-ros2-container.sh` script allows you to create and manage a ROS2 Docker
 
 ```bash
 # Basic usage (runs bash shell in the container)
-./run-ros2-container.sh
+./start-ros2-container.sh
 
 # Run with a specific ROS2 distribution
-./run-ros2-container.sh --distro iron
+./start-ros2-container.sh --distro iron
 
 # Create a container with GPU support and custom name
-./run-ros2-container.sh --gpu --name my_ros2_dev
+./start-ros2-container.sh --gpu --name my_ros2_dev
 ```
 
 For detailed usage and all available options, run:
 ```bash
-./run-ros2-container.sh --help
+./start-ros2-container.sh --help
 ```
 
 ### ROS2 Environment Setup
@@ -102,7 +102,7 @@ This ensures that ROS2 commands work without manual sourcing in most scenarios.
 
 ## Yocto Development Environment
 
-The `run-yocto-container.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools for embedded Linux development.
+The `start-yocto-container.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools for embedded Linux development.
 
 ### Yocto-Specific Features:
 
@@ -124,18 +124,18 @@ The container tags are based on the host Linux distribution (e.g., `ubuntu-22.04
 
 ```bash
 # Basic usage (runs bash shell in the container)
-./run-yocto-container.sh
+./start-yocto-container.sh
 
 # Create a container with a custom name
-./run-yocto-container.sh --name my_yocto_dev
+./start-yocto-container.sh --name my_yocto_dev
 
 # Create a container with a custom workspace directory
-./run-yocto-container.sh --workspace ~/my_yocto_workspace
+./start-yocto-container.sh --workspace ~/my_yocto_workspace
 ```
 
 For detailed usage and all available options, run:
 ```bash
-./run-yocto-container.sh --help
+./start-yocto-container.sh --help
 ```
 
 ### Yocto Quick Start:
@@ -179,10 +179,10 @@ To save your current container configuration:
 
 ```bash
 # Save ROS2 container configuration
-./run-ros2-container.sh --name my_ros2_dev --workspace ~/my_ros2_projects --gpu --save-config
+./start-ros2-container.sh --name my_ros2_dev --workspace ~/my_ros2_projects --gpu --save-config
 
 # Save Yocto container configuration
-./run-yocto-container.sh --name my_yocto_dev --workspace ~/my_yocto_projects --save-config
+./start-yocto-container.sh --name my_yocto_dev --workspace ~/my_yocto_projects --save-config
 ```
 
 ### Reusing Configurations
@@ -191,10 +191,10 @@ Once saved, you can reuse your configuration by simply specifying the container 
 
 ```bash
 # Use saved ROS2 configuration
-./run-ros2-container.sh --name my_ros2_dev
+./start-ros2-container.sh --name my_ros2_dev
 
 # Use saved Yocto configuration
-./run-yocto-container.sh --name my_yocto_dev
+./start-yocto-container.sh --name my_yocto_dev
 ```
 
 ### Listing Saved Configurations
@@ -202,9 +202,9 @@ Once saved, you can reuse your configuration by simply specifying the container 
 To view all saved configurations:
 
 ```bash
-./run-ros2-container.sh --list-configs
+./start-ros2-container.sh --list-configs
 # or
-./run-yocto-container.sh --list-configs
+./start-yocto-container.sh --list-configs
 ```
 
 ### Reproducing Containers with Original Arguments
@@ -212,7 +212,7 @@ To view all saved configurations:
 When listing configurations with `--list-configs`, you'll see the original command-line arguments that were used to create each container. This allows you to easily reproduce a container setup exactly as it was originally configured:
 
 ```bash
-$ ./run-ros2-container.sh --list-configs
+$ ./start-ros2-container.sh --list-configs
 Saved container configurations:
   - test_container (ros2 jazzy) - Last used: 2025-06-06 15:31:46
     Original command: ros2-container.sh --name test_container --distro jazzy --gpu
@@ -245,22 +245,22 @@ The scripts provide several options for managing saved configurations:
 
 ```bash
 # List all saved configurations
-./run-ros2-container.sh --list-configs
+./start-ros2-container.sh --list-configs
 
 # Show detailed configuration for a specific container
-./run-ros2-container.sh --show-config my_ros2_dev
+./start-ros2-container.sh --show-config my_ros2_dev
 
 # Show configurations for all running containers
-./run-ros2-container.sh --show-running
+./start-ros2-container.sh --show-running
 
 # Remove a specific configuration
-./run-ros2-container.sh --remove-config old_container
+./start-ros2-container.sh --remove-config old_container
 
 # Clean up configurations not used in the last 30 days
-./run-ros2-container.sh --cleanup-configs
+./start-ros2-container.sh --cleanup-configs
 
 # Clean up configurations not used in the last 60 days
-./run-ros2-container.sh --cleanup-configs 60
+./start-ros2-container.sh --cleanup-configs 60
 ```
 
 ## Using Robust Container Scripts

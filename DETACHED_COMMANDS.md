@@ -148,7 +148,7 @@ If you're still having issues with VS Code and containers:
 5. **Recreate the Container**: As a last resort, you might need to recreate the container using the original run script
 
 ```bash
-./run-ros2-container.sh --name <container_name> --clean
+./start-ros2-container.sh --name <container_name> --clean
 ```
 
 ### Easy Container Recreation
@@ -216,7 +216,7 @@ When you encounter this error:
 
 2. **Manually recreate the container**: If automatic recreation fails, you'll need to manually recreate it
    ```bash
-   ./run-ros2-container.sh --name <container_name> --clean
+   ./start-ros2-container.sh --name <container_name> --clean
    ```
 
 3. **Use saved configuration**: If you previously saved the configuration with `--save-config`, the script will try to use those settings

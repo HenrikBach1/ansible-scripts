@@ -1,6 +1,6 @@
 #!/bin/bash
 # Common container runner script for development environments
-# This script is called by environment-specific scripts like run-ros2-container.sh and run-yocto-container.sh
+# This script is called by environment-specific scripts like start-ros2-container.sh and start-yocto-container.sh
 file=run-container-common.sh
 
 # Source the configuration management system
@@ -257,6 +257,6 @@ run_container() {
 # This script should not be called directly
 if [[ "$(basename "$0")" == "run-container-common.sh" ]]; then
     echo "Error: This script should not be called directly."
-    echo "Please use one of the environment-specific scripts like run-ros2-container.sh or run-yocto-container.sh."
+    echo "Please use one of the environment-specific scripts like start-ros2-container.sh or start-yocto-container.sh."
     exit 1
 fi

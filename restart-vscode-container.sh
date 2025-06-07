@@ -67,7 +67,7 @@ if echo "$MOUNTS" | grep -q "entrypoint.sh"; then
     else
         echo "Could not automatically recreate container."
         echo "Please manually recreate the container using:"
-        echo "./run-ros2-container.sh --name $CONTAINER_NAME --clean"
+        echo "./start-ros2-container.sh --name $CONTAINER_NAME --clean"
         exit 1
     fi
 else
@@ -88,7 +88,7 @@ else
         else
             echo "Could not automatically recreate container."
             echo "Please manually recreate the container using:"
-            echo "./run-ros2-container.sh --name $CONTAINER_NAME --clean"
+            echo "./start-ros2-container.sh --name $CONTAINER_NAME --clean"
             exit 1
         fi
     fi
@@ -104,7 +104,7 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     else
         echo "Could not automatically recreate container."
         echo "Please manually recreate the container using:"
-        echo "./run-ros2-container.sh --name $CONTAINER_NAME --clean"
+        echo "./start-ros2-container.sh --name $CONTAINER_NAME --clean"
         exit 1
     fi
 fi

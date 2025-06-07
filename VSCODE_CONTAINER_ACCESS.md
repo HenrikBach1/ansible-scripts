@@ -31,7 +31,7 @@ The robust containers are specifically designed to work reliably with VS Code, p
 
 1. Make sure your ROS2 container is running:
    ```bash
-   ./run-ros2-container.sh
+   ./start-ros2-container.sh
    ```
 
 2. In VS Code:
@@ -108,13 +108,13 @@ If your container is exiting immediately after starting, you can use the --fix o
 
 ```bash
 # For ROS2 containers
-./run-ros2-container.sh --fix
+./start-ros2-container.sh --fix
 
 # For Yocto containers
-./run-yocto-container.sh --fix
+./start-yocto-container.sh --fix
 
 # To fix a specific container
-./run-ros2-container.sh --fix my_container_name
+./start-ros2-container.sh --fix my_container_name
 ```
 
 This will:

@@ -44,20 +44,20 @@ if [ -d "$CONFIG_DIR/$CONTAINER_NAME" ] && [ -f "$CONFIG_DIR/$CONTAINER_NAME/ori
     ORIGINAL_ARGS=$(cat "$CONFIG_DIR/$CONTAINER_NAME/original_args")
     
     echo "Found saved configuration, recreating container with:"
-    echo "./run-ros2-container.sh $ORIGINAL_ARGS --clean"
+    echo "./start-ros2-container.sh $ORIGINAL_ARGS --clean"
     
     # Run the container with original args and --clean to start fresh
-    ./run-ros2-container.sh $ORIGINAL_ARGS --clean
+    ./start-ros2-container.sh $ORIGINAL_ARGS --clean
 else
     # Create a default ROS2 container with workspace fixes
     WORKSPACE_DIR="$HOME/projects"
     mkdir -p "$WORKSPACE_DIR"
 
     echo "No saved configuration found. Creating a default ROS2 container."
-    echo "Running: ./run-ros2-container.sh --name $CONTAINER_NAME --workspace $WORKSPACE_DIR --save-config --clean"
+    echo "Running: ./start-ros2-container.sh --name $CONTAINER_NAME --workspace $WORKSPACE_DIR --save-config --clean"
     
     # Create a default ROS2 container
-    ./run-ros2-container.sh --name "$CONTAINER_NAME" --workspace "$WORKSPACE_DIR" --save-config --clean
+    ./start-ros2-container.sh --name "$CONTAINER_NAME" --workspace "$WORKSPACE_DIR" --save-config --clean
 fi
 
 echo ""

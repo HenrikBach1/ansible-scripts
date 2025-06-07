@@ -14,7 +14,7 @@ echo -e "${YELLOW}Restarting ROS2 Container: $CONTAINER_NAME${NC}"
 # Check if the container exists
 if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
     echo -e "${RED}Error: Container '$CONTAINER_NAME' does not exist.${NC}"
-    echo "Please run ./run-ros2-container.sh first to create the container."
+    echo "Please run ./start-ros2-container.sh first to create the container."
     exit 1
 fi
 
