@@ -102,6 +102,26 @@ This script will:
 
 If you see `temp_*_container_image` in your Docker images list, this script will help clean them up safely.
 
+## Fixing Container Stability Issues
+
+If your container is exiting immediately after starting, you can use the --fix option with the container scripts:
+
+```bash
+# For ROS2 containers
+./run-ros2-container.sh --fix
+
+# For Yocto containers
+./run-yocto-container.sh --fix
+
+# To fix a specific container
+./run-ros2-container.sh --fix my_container_name
+```
+
+This will:
+1. Create a robust keep-alive process in the container
+2. Set up a trap to keep the container running even if the main process exits
+3. Ensure the container stays running for VS Code to connect
+
 ## Using Docker Exec with the Container
 
 When you connect to the container using `docker exec -it ros2_container bash`, custom commands like `container-help` may not be available. Use the provided `docker-exec-it` script instead:

@@ -96,7 +96,7 @@ done
         $additional_args \
         --name \"$container_name\" \
         \"$image_name\" \
-        bash -c \"$env_setup_command && mkdir -p /workspace && mkdir -p /projects && echo '$KEEP_ALIVE_SCRIPT' > /home/ubuntu/keep_alive.sh && chmod +x /home/ubuntu/keep_alive.sh && nohup /home/ubuntu/keep_alive.sh >/dev/null 2>&1 & echo 'Container is running with keep-alive process' && sleep infinity\""
+        bash -c \"$env_setup_command && mkdir -p /workspace && mkdir -p /projects && echo 'trap \\\"while true; do sleep 3600; done\\\" EXIT' > /home/ubuntu/keep_alive.sh && echo 'while true; do sleep 3600; done' >> /home/ubuntu/keep_alive.sh && chmod +x /home/ubuntu/keep_alive.sh && nohup /home/ubuntu/keep_alive.sh >/dev/null 2>&1 & echo 'Container is running with keep-alive process' && bash\""
     
     # Execute the command
     eval $run_cmd

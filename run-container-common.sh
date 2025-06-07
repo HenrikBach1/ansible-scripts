@@ -7,6 +7,36 @@ file=run-container-common.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/container-config.sh"
 
+# Function to fix a container that keeps exiting
+fix_container_exit() {
+    local CONTAINER_NAME="$1"
+    
+    # Check if container exists
+    if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container '$CONTAINER_NAME' does not exist."
+        return 1
+    fi
+    
+    # Get container status
+    local STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME")
+    echo "Container status: $STATUS"
+    
+    # If container is not running, start it
+    if [ "$STATUS" != "running" ]; then
+        echo "Starting container..."
+        docker start "$CONTAINER_NAME"
+    fi
+    
+    # Create a keep-alive script inside the container
+    echo "Adding keep-alive trap to container..."
+    docker exec "$CONTAINER_NAME" bash -c "echo 'trap \"while true; do sleep 3600; done\" EXIT' > /home/ubuntu/keep_container_alive.sh && echo 'while true; do sleep 3600; done' >> /home/ubuntu/keep_container_alive.sh && chmod +x /home/ubuntu/keep_container_alive.sh && nohup /home/ubuntu/keep_container_alive.sh >/dev/null 2>&1 &"
+    
+    echo "Container fixed. It should now remain running even if the main process exits."
+    echo "To connect: docker attach $CONTAINER_NAME"
+    
+    return 0
+}
+
 # Function to display help
 show_container_help() {
     local ENV_TYPE="$1"
@@ -36,6 +66,7 @@ show_container_help() {
     echo "  --show-running         Show configurations for all running containers"
     echo "  --remove-config NAME   Remove a saved container configuration"
     echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
+    echo "  --fix [NAME]           Fix a container that keeps exiting"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"

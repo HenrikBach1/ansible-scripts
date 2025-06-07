@@ -236,10 +236,17 @@ if ! grep -q "container-help" $HOME/.bashrc; then
     echo 'container-help' >> $HOME/.bashrc
 fi
 
-# Execute the provided command or fallback to bash
+# Execute the provided command or fallback to bash with trap to keep container alive
+trap 'echo "Shell session ended, keeping container alive..."; while true; do sleep 3600; done' EXIT
+
 shift
 if [ $# -gt 0 ]; then
-  exec "$@"
+  "$@"
 else
-  exec bash
+  bash
 fi
+
+# If execution reaches here, the command has completed or exited
+# The trap will keep the container running
+echo "Interactive session ended, but container will keep running in the background."
+echo "To reconnect: docker attach ros2_container"

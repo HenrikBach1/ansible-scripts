@@ -184,6 +184,17 @@ if [ -z "$HOME/.container_stop_requested" ]; then
 fi
 EOF
 
-# Execute the command
+# Execute the command with trap to keep container alive
+trap 'echo "Shell session ended, keeping container alive..."; while true; do sleep 3600; done' EXIT
+
 echo "Executing command: $@"
-exec "$@"
+if [ $# -gt 0 ]; then
+  "$@"
+else
+  bash
+fi
+
+# If execution reaches here, the command has completed or exited
+# The trap will keep the container running
+echo "Interactive session ended, but container will keep running in the background."
+echo "To reconnect: docker attach yocto_container"

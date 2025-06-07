@@ -37,6 +37,15 @@ for arg in "$@"; do
         list_container_configs
         exit 0
     fi
+    if [[ "$arg" == "--fix" ]]; then
+        if [[ -n "$2" ]]; then
+            fix_container_exit "$2"
+            exit $?
+        else
+            fix_container_exit "$CONTAINER_NAME"
+            exit $?
+        fi
+    fi
     if [[ "$arg" == "--debug-config" ]]; then
         debug_container_config
         exit 0
