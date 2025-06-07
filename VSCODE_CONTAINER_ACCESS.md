@@ -58,17 +58,49 @@ These multiple mounts ensure maximum compatibility with different tools and work
 
 ### Fixing Missing Volume Mounts
 
-If you have existing containers created with older scripts that are missing the `/projects` mount, you can use the fix-container-volumes.sh script:
+If you have existing containers created with older scripts that are missing the `/projects` mount, you can use one of our fix scripts:
 
+For ROS2 containers:
+```bash
+./fix-ros2-container-volumes.sh your_container_name
+```
+
+For Yocto containers:
+```bash
+./fix-yocto-container-volumes.sh your_container_name
+```
+
+For any container type (more general approach):
 ```bash
 ./fix-container-volumes.sh your_container_name
 ```
 
-This script will:
+These scripts will:
 1. Create the `/projects` directory in the container
 2. Temporarily stop the container
 3. Recreate it with the proper volume mounts
 4. Preserve all other settings and configurations
+
+The container-specific scripts (for ROS2 and Yocto) are simpler and more reliable, so they are recommended when possible.
+
+## Cleaning Up Temporary Images
+
+When fixing container volume mounts, temporary images can sometimes be left behind (e.g., `temp_ros2_container_image`). 
+These are intermediate images created during the container fixing process.
+
+To clean up these temporary images, use the cleanup script:
+
+```bash
+./cleanup-container-images.sh
+```
+
+This script will:
+1. Identify any temporary container images
+2. Stop and remove containers using these images
+3. Force remove the temporary images
+4. Run a general Docker cleanup
+
+If you see `temp_*_container_image` in your Docker images list, this script will help clean them up safely.
 
 ## Using Docker Exec with the Container
 

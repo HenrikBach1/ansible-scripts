@@ -17,8 +17,12 @@ if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/nul
     exit 1
 fi
 
+# Get the container's status before we start
+ORIGINAL_STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME")
+echo "Original container status: $ORIGINAL_STATUS"
+
 # Check if container is running
-if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+if [ "$ORIGINAL_STATUS" != "running" ]; then
     echo "Container is not running. Starting it..."
     docker start "$CONTAINER_NAME"
     
@@ -59,36 +63,111 @@ fi
 
 echo "Found workspace source directory: $WORKSPACE_SRC"
 
-# Create a bind mount for /projects using the same source as /workspace
-echo "Creating bind mount for /projects using source: $WORKSPACE_SRC"
+# Get the container's image name
+IMAGE_NAME=$(docker inspect --format='{{.Config.Image}}' "$CONTAINER_NAME")
+echo "Container image: $IMAGE_NAME"
 
-# Stop the container temporarily
+# If the image name is a temporary image, try to find the original image
+if [[ "$IMAGE_NAME" == temp_*_image ]]; then
+    echo "Detected temporary image. This may be from a previous fix attempt."
+    echo "Attempting to find original image..."
+    
+    # Try to find the original image based on container type
+    if [[ "$CONTAINER_NAME" == *ros2* ]]; then
+        # Look for ROS2 distro
+        ROS2_DISTRO=$(docker exec $CONTAINER_NAME bash -c "printenv | grep ROS_DISTRO" 2>/dev/null | cut -d= -f2 || echo "jazzy")
+        if [ -z "$ROS2_DISTRO" ]; then
+            ROS2_DISTRO="jazzy"
+        fi
+        echo "Detected ROS2 distribution: $ROS2_DISTRO"
+        IMAGE_NAME="osrf/ros:${ROS2_DISTRO}-desktop"
+        echo "Using ROS2 image: $IMAGE_NAME"
+    elif [[ "$CONTAINER_NAME" == *yocto* ]]; then
+        # Default to ubuntu-22.04 for Yocto
+        IMAGE_NAME="crops/poky:ubuntu-22.04"
+        echo "Using Yocto image: $IMAGE_NAME"
+    else
+        echo "Warning: Could not determine original image. Using current image: $IMAGE_NAME"
+    fi
+fi
+
+# Get all the existing mounts
+MOUNTS=""
+docker inspect "$CONTAINER_NAME" | grep -A 20 "\"Mounts\":" | grep "Source" | while read line; do
+    SRC=$(echo "$line" | sed 's/.*"Source": "\(.*\)",/\1/')
+    DST=$(grep -A 1 "\"Source\": \"$SRC\"" <(docker inspect "$CONTAINER_NAME") | grep "Destination" | sed 's/.*"Destination": "\(.*\)",/\1/')
+    
+    # Skip if destination is /projects
+    if [ "$DST" == "/projects" ]; then
+        continue
+    fi
+    
+    MOUNTS+=" -v $SRC:$DST"
+done
+
+# Get the command used to run the container
+CMD=$(docker inspect --format='{{range .Config.Cmd}}{{.}} {{end}}' "$CONTAINER_NAME")
+echo "Container command: $CMD"
+
+# Get all environment variables
+ENV_VARS=""
+docker inspect --format='{{range .Config.Env}}{{.}} {{end}}' "$CONTAINER_NAME" | tr ' ' '\n' | while read env_var; do
+    if [ -n "$env_var" ]; then
+        ENV_VARS+=" -e $env_var"
+    fi
+done
+
+# Check for privileged mode
+PRIVILEGED=""
+if docker inspect --format='{{.HostConfig.Privileged}}' "$CONTAINER_NAME" | grep -q "true"; then
+    PRIVILEGED="--privileged"
+fi
+
+# Check for network mode
+NETWORK_MODE="--network=$(docker inspect --format='{{.HostConfig.NetworkMode}}' "$CONTAINER_NAME")"
+
+# Simple approach: use docker run with the exact same image and add the projects mount
+echo "Creating a bind mount for /projects using source: $WORKSPACE_SRC"
+
+# Stop the container
 docker stop "$CONTAINER_NAME"
 
-# Commit the current container to a temporary image
-TEMP_IMAGE="temp_${CONTAINER_NAME}_image"
-docker commit "$CONTAINER_NAME" "$TEMP_IMAGE"
-
-# Remove the old container
+# Remove the container
 docker rm "$CONTAINER_NAME"
 
-# Create a new container with the same configuration plus the /projects mount
-# Get the existing command
-CMD=$(docker inspect --format='{{.Config.Cmd}}' "$TEMP_IMAGE" | sed 's/^\[//;s/\]$//;s/\"//g')
-
-# Run a new container with the same name but with the additional mount
-docker run -d --privileged --network=host \
+# Create a new container with the same settings plus the /projects mount
+echo "Recreating container with /projects mount..."
+docker run -d $PRIVILEGED $NETWORK_MODE \
     --name "$CONTAINER_NAME" \
-    $(docker inspect --format='{{range .Config.Env}}--env {{.}} {{end}}' "$TEMP_IMAGE") \
-    $(docker inspect --format='{{range $k, $v := .HostConfig.PortBindings}}{{range $v}}--publish {{.HostPort}}:{{$k}} {{end}}{{end}}' "$TEMP_IMAGE") \
-    $(docker inspect --format='{{range .Mounts}}{{if ne .Destination "/projects"}}--volume {{.Source}}:{{.Destination}} {{end}}{{end}}' "$TEMP_IMAGE") \
-    --volume "$WORKSPACE_SRC:/projects" \
-    "$TEMP_IMAGE" $CMD
+    -v "$WORKSPACE_SRC:/projects" \
+    -v "$WORKSPACE_SRC:/workspace" \
+    -v "$WORKSPACE_SRC:/home/ubuntu/ros2_ws" \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -e DISPLAY \
+    "$IMAGE_NAME" bash -c "mkdir -p /projects && chmod 777 /projects && exec $CMD"
 
-# Clean up temporary image
-docker rmi "$TEMP_IMAGE"
+# Check if container was created successfully
+if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Failed to recreate container."
+    exit 1
+fi
+
+# If the original container was running, make sure the new one is too
+if [ "$ORIGINAL_STATUS" == "running" ]; then
+    if [ "$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME")" != "running" ]; then
+        echo "Starting container..."
+        docker start "$CONTAINER_NAME"
+    fi
+fi
 
 echo "Container has been recreated with the /projects mount."
 echo "Verify the container is running and has the correct mounts:"
 docker ps | grep "$CONTAINER_NAME"
 docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{printf "\n"}}{{end}}' "$CONTAINER_NAME"
+
+# Suggest using robust container scripts if needed
+echo ""
+echo "If the container still has issues, consider recreating it with the robust container scripts:"
+echo "./robust-ros2-container.sh --name $CONTAINER_NAME --workspace $WORKSPACE_SRC"
+echo "or"
+echo "./robust-yocto-container.sh --name $CONTAINER_NAME --workspace $WORKSPACE_SRC"
