@@ -248,3 +248,52 @@ This script:
 4. Ensures ROS2 is properly sourced
 
 This is the most reliable way to create a container that will stay running and be accessible from VS Code, especially useful if you're experiencing persistent issues with the other scripts.
+
+## Additional Documentation
+
+For a complete reference of all available container commands, see [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
+
+## In-Container Commands
+
+Both ROS2 and Yocto containers provide special commands that you can use when connected to the container:
+
+### Standard In-Container Commands
+
+1. **`detach`**: Detach from the container while keeping it running in the background
+   ```bash
+   # Inside container
+   detach
+   ```
+
+2. **`stop`**: Stop the container completely
+   ```bash
+   # Inside container
+   stop
+   ```
+
+3. **`remove`**: Stop and remove the container completely
+   ```bash
+   # Inside container
+   remove
+   ```
+
+4. **`help`**: Show all available container commands
+   ```bash
+   # Inside container
+   help
+   ```
+
+### Legacy Commands (Backward Compatibility)
+
+- **`stop_container`**: Same as `stop`
+- **`container_help`**: Same as `help`
+
+### How These Commands Work
+
+The in-container commands work by creating special marker files that are detected by the container-watch.sh script running on the host:
+
+- `/home/ubuntu/.container_detach_requested` (ROS2) or `/workdir/.container_detach_requested` (Yocto): Created when using `detach`
+- `/home/ubuntu/.container_stop_requested` (ROS2) or `/workdir/.container_stop_requested` (Yocto): Created when using `stop`
+- `/home/ubuntu/.container_remove_requested` (ROS2) or `/workdir/.container_remove_requested` (Yocto): Created when using `remove`
+
+The container-watch.sh script monitors for these files and takes appropriate action (detach, stop, or remove).

@@ -28,7 +28,7 @@ All development containers in this repository share these common features:
 
 - **Workspace Mounting**: Your project directories are mounted at multiple paths for compatibility:
   - `/workspace`: The primary workspace path
-  - `/projects`: For compatibility with VS Code extensions
+  - `/projects`: For compatibility with VS Code extensions (important for Remote Development)
   - Container-specific paths like `/home/ubuntu/ros2_ws` or `/workdir`
 - **Persistent by Default**: Container state is preserved between sessions
 - **VS Code Integration**: Remote development with VS Code
@@ -36,6 +36,11 @@ All development containers in this repository share these common features:
 - **Container Commands**:
   - `detach`: Disconnect from the container while keeping it running
   - `stop`: Completely stop the container
+  - `remove`: Stop and remove the container completely
+  - `help`: Show all available container commands
+  - Legacy aliases: `stop_container`, `container_help`, and `container-help`
+  - `remove`: Stop and remove the container
+  - `help`: Show all available commands
 
 These features are implemented through a shared script (`run-container-common.sh`) that is used by the environment-specific container scripts. This modular approach reduces code duplication and ensures consistent behavior across different development environments.
 

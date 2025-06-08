@@ -49,46 +49,53 @@ The robust containers are specifically designed to work reliably with VS Code, p
 Our container scripts mount the workspace directory to multiple paths:
 
 - `/workspace`: The primary path for development work
-- `/projects`: An alternate path for compatibility with some VS Code extensions and tools
+- `/projects`: An alternate path **required** for VS Code Remote Development and many extensions
 - Container-specific paths:
   - ROS2: `/home/ubuntu/ros2_ws`
   - Yocto: `/workdir` and `/home/ubuntu/yocto_ws`
 
-These multiple mounts ensure maximum compatibility with different tools and workflows.
+These multiple mounts ensure maximum compatibility with different tools and workflows. The `/projects` directory is particularly important for VS Code Remote Development, as many extensions expect files to be there.
 
 ### Fixing Missing Volume Mounts
 
-If you have existing containers created with older scripts that are missing the `/projects` mount, you can use one of our fix scripts:
+If you have existing containers created with older scripts that are missing the `/projects` mount, you have two options:
 
-For ROS2 containers:
+### Option 1: Use the fix-projects-path.sh script (Recommended)
+
+We provide a helper script that will stop, remove, and recreate your container with the correct mounts:
+
 ```bash
-./fix-ros2-container-volumes.sh your_container_name
+./fix-projects-path.sh your_container_name
 ```
 
-For Yocto containers:
+### Option 2: Manually recreate the container
+
+If you prefer to do it manually:
+
+1. Stop the container: `docker stop your_container_name`
+2. Remove the container: `docker rm your_container_name`
+3. Recreate it with the proper script: `./start-ros2-container.sh` or `./start-yocto-container.sh`
+
+> **Note:** The only reliable way to add mounts to a container is to recreate it. Docker does not support adding bind mounts to running containers.
+## Checking Container Mounts
+
+You can verify that your container has the correct mounts with this command:
+
 ```bash
-./fix-yocto-container-volumes.sh your_container_name
+docker exec -it your_container_name ls -la /projects
 ```
 
-For any container type (more general approach):
-```bash
-./fix-container-volumes.sh your_container_name
-```
+If this command shows your workspace files, the mount is working correctly. If it shows "No such file or directory", you need to recreate the container as described above.
 
-These scripts will:
-1. Create the `/projects` directory in the container
-2. Temporarily stop the container
-3. Recreate it with the proper volume mounts
-4. Preserve all other settings and configurations
+## Common Issues and Solutions
 
-The container-specific scripts (for ROS2 and Yocto) are simpler and more reliable, so they are recommended when possible.
+### Missing /projects Directory
 
-## Cleaning Up Temporary Images
+The most common issue with VS Code Remote Development is a missing `/projects` directory. This happens when:
+1. The container was created with an older version of the scripts
+2. The container was created manually without the correct volume mounts
 
-When fixing container volume mounts, temporary images can sometimes be left behind (e.g., `temp_ros2_container_image`). 
-These are intermediate images created during the container fixing process.
-
-To clean up these temporary images, use the cleanup script:
+**Solution:** Use the `fix-projects-path.sh` script or manually recreate the container.
 
 ```bash
 ./cleanup-container-images.sh

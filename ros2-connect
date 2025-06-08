@@ -1,0 +1,113 @@
+#!/bin/bash
+# Helper script for connecting to the ROS2 container with detach support
+
+CONTAINER_NAME="${1:-ros2_container}"
+
+# Check if container exists
+if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' does not exist"
+    exit 1
+fi
+
+# Check if container is running
+if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' is not running"
+    echo "Starting container..."
+    docker start "$CONTAINER_NAME"
+    sleep 1
+fi
+
+# Create a function to generate a custom ROS2 script
+cat > .ros2_temp_script.sh << 'EOF'
+#!/bin/bash
+
+# Define functions
+detach() {
+  echo "Detaching from container (container keeps running)..."
+  echo "Container will continue running in the background."
+  touch /home/ubuntu/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+  exit 0
+}
+
+stop() {
+  echo "Stopping container (container will be stopped)..."
+  touch /home/ubuntu/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+  exit 0
+}
+
+stop_container() {
+  echo "Stopping container completely..."
+  stop
+}
+
+remove() {
+  echo "Stopping and removing container..."
+  touch /home/ubuntu/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+  exit 0
+}
+
+help() {
+  echo "ROS2 Container Commands:"
+  echo "------------------------"
+  echo "  - Type 'detach': Detach from container (container keeps running)"
+  echo "  - Type 'stop': Stop the container (container will be stopped)"
+  echo "  - Type 'remove': Stop and remove the container"
+  echo "  - Type 'help': Show this help message"
+  echo ""
+  echo "Extra commands:"
+  echo "  - Type 'container_help': Same as 'help'"
+  echo "  - Type 'container-help': Same as 'help'"
+  echo "  - Type 'stop_container': Same as 'stop'"
+  echo ""
+  echo "Note: When you detach, a helper script on the host will monitor and restart"
+  echo "      the container if needed, ensuring it continues running in the background."
+  echo ""
+  echo "Note: When you use 'stop', the container will be completely shut down."
+  echo "      When you use 'remove', the container will be stopped and removed."
+}
+
+container_help() {
+  help
+}
+
+# Also support container-help with a hyphen for backward compatibility
+container-help() {
+  help
+}
+
+# Export the functions so they're available in the shell
+export -f detach
+export -f stop
+export -f stop_container
+export -f remove
+export -f help
+export -f container_help
+export -f container-help
+
+# Source ROS2 environment
+if [ -f /opt/ros/*/setup.bash ]; then
+  source /opt/ros/*/setup.bash
+fi
+
+# Show help message on login
+echo "Welcome to the ROS2 Container!"
+echo "Use these commands to control the container:"
+echo "  - Type 'detach' to detach from the container (container keeps running)"
+echo "  - Type 'stop' to stop the container"
+echo "  - Type 'remove' to stop and remove the container"
+echo "  - Type 'help' for more information"
+echo ""
+
+# Start bash with the functions defined
+exec bash
+EOF
+
+chmod +x .ros2_temp_script.sh
+
+# Connect to the container with custom bashrc support
+echo "Connecting to $CONTAINER_NAME..."
+docker cp .ros2_temp_script.sh "$CONTAINER_NAME":/tmp/ros2_container_functions.sh
+docker exec -it "$CONTAINER_NAME" bash /tmp/ros2_container_functions.sh
+
+# Clean up
+rm -f .ros2_temp_script.sh

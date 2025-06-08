@@ -19,15 +19,80 @@ GPU_SUPPORT=false
 CUSTOM_CMD="bash"
 PERSISTENT=true
 RUN_AS_ROOT=false
-DETACH_MODE=false
-AUTO_ATTACH=true
+DETACH_MODE=true
+AUTO_ATTACH=false
 CLEAN_START=false
 SAVE_CONFIG=false
 LIST_CONFIGS=false
 
+# Function to display specialized help for ROS2
+show_ros2_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo "Run a ROS2 Docker container with appropriate settings"
+    echo ""
+    echo "Options:"
+    echo "  -d, --distro DISTRO    ROS2 distro (default: $ROS2_DISTRO)"
+    echo "  -n, --name NAME        Container name (default: $CONTAINER_NAME)"
+    echo "  -w, --workspace DIR    Host workspace directory (default: $WORKSPACE_DIR)"
+    echo "  -g, --gpu              Enable NVIDIA GPU support (if available)"
+    echo "  -c, --cmd CMD          Command to run in container (default: bash)"
+    echo "  -p, --persistent       Keep container after exit (enabled by default)"
+    echo "  -r, --root             Run container as root user instead of current user"
+    echo "  -D, --detach           Run container in detached mode (enabled by default)"
+    echo "  --attach               Automatically attach to container after starting"
+    echo "  --clean                Stop and remove existing container before starting"
+    echo "  --save-config          Save current configuration for future use"
+    echo "  --list-configs         List all saved container configurations"
+    echo "  --show-config NAME     Show detailed configuration for a specific container"
+    echo "  --show-running         Show configurations for all running containers"
+    echo "  --remove-config NAME   Remove a saved container configuration"
+    echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
+    echo "  --fix [NAME]           Fix a container that keeps exiting"
+    echo "  -h, --help             Display this help message"
+    echo ""
+    echo "Examples:"
+    echo "  # Basic usage (runs in detached mode by default)"
+    echo "  $0"
+    echo ""
+    echo "  # Create a container with a specific ROS2 distro"
+    echo "  $0 --distro humble"
+    echo ""
+    echo "  # Create a container with a custom name"
+    echo "  $0 --name my_ros2_dev"
+    echo ""
+    echo "  # Run in attached mode (interactive session)"
+    echo "  $0 --attach"
+    echo ""
+    echo "  # Clean start (stop and remove existing container first)"
+    echo "  $0 --clean"
+    echo ""
+    echo "  # Save current configuration for future use"
+    echo "  $0 --save-config"
+    echo ""
+    echo "  # Fix a stopped container and make it keep running"
+    echo "  $0 --fix"
+    echo ""
+    echo "Note: By default, containers run in detached mode."
+    echo "To connect to a running container:"
+    echo "  - Run: ./ros2-connect"
+    echo "  - Or run: docker exec -it ros2_container bash"
+    echo ""
+    echo "In the container, you can use these commands:"
+    echo "  - Type 'detach' to detach from the container (container keeps running)"
+    echo "  - Type 'stop' to stop the container"
+    echo "  - Type 'remove' to stop and remove the container"
+    echo "  - Type 'help' for more information"
+    echo ""
+    echo "Legacy commands for backward compatibility:"
+    echo "  - Type 'stop_container' (same as 'stop')"
+    echo "  - Type 'container_help' (same as 'help')"
+    echo ""
+    exit 0
+}
+
 # Display help message
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    show_container_help "ros2" "$ROS2_DISTRO" "distro" "$WORKSPACE_DIR"
+    show_ros2_help
     exit 0
 fi
 
@@ -126,6 +191,10 @@ while [[ $# -gt 0 ]]; do
             DETACH_MODE=true
             shift
             ;;
+        --attach)
+            AUTO_ATTACH=true
+            shift
+            ;;
         --no-attach)
             AUTO_ATTACH=false
             shift
@@ -147,7 +216,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         -h|--help)
-            show_container_help "ros2" "$ROS2_DISTRO" "distro" "$WORKSPACE_DIR"
+            show_ros2_help
             exit 0
             ;;
         *)

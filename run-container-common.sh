@@ -155,8 +155,29 @@ run_container() {
 
     # If container is already running, attach to it
     if [ -n "$CONTAINER_RUNNING" ]; then
-        echo "Container $CONTAINER_NAME is already running, attaching to it..."
-        docker attach "$CONTAINER_NAME"
+        if [ "$ENV_TYPE" = "ros2" ]; then
+            # For ROS2 containers, use our custom connection script
+            echo "Container $CONTAINER_NAME is already running, connecting to it..."
+            if [ -f "$(dirname "$0")/ros2-connect" ]; then
+                "$(dirname "$0")/ros2-connect" "$CONTAINER_NAME"
+            else
+                echo "Warning: ros2-connect script not found, using docker exec instead."
+                docker exec -it "$CONTAINER_NAME" bash
+            fi
+        elif [ "$ENV_TYPE" = "yocto" ]; then
+            # For Yocto containers, use our custom connection script
+            echo "Container $CONTAINER_NAME is already running, connecting to it..."
+            if [ -f "$(dirname "$0")/yocto-connect" ]; then
+                "$(dirname "$0")/yocto-connect" "$CONTAINER_NAME"
+            else
+                echo "Warning: yocto-connect script not found, using docker exec instead."
+                docker exec -it "$CONTAINER_NAME" bash
+            fi
+        else
+            # For other containers, use the standard attach method
+            echo "Container $CONTAINER_NAME is already running, attaching to it..."
+            docker attach "$CONTAINER_NAME"
+        fi
         exit 0
     fi
 
@@ -165,11 +186,39 @@ run_container() {
         echo "Container $CONTAINER_NAME exists but is not running, starting it..."
         docker start "$CONTAINER_NAME" >/dev/null
         
+        # Give the container a moment to start
+        sleep 2
+        
         if [ "$DETACH_MODE" = false ] || [ "$AUTO_ATTACH" = true ]; then
-            docker attach "$CONTAINER_NAME"
+            if [ "$ENV_TYPE" = "ros2" ]; then
+                # For ROS2 containers, use our custom connection script
+                if [ -f "$(dirname "$0")/ros2-connect" ]; then
+                    "$(dirname "$0")/ros2-connect" "$CONTAINER_NAME"
+                else
+                    echo "Warning: ros2-connect script not found, using docker exec instead."
+                    docker exec -it "$CONTAINER_NAME" bash
+                fi
+            elif [ "$ENV_TYPE" = "yocto" ]; then
+                # For Yocto containers, use our custom connection script
+                if [ -f "$(dirname "$0")/yocto-connect" ]; then
+                    "$(dirname "$0")/yocto-connect" "$CONTAINER_NAME"
+                else
+                    echo "Warning: yocto-connect script not found, using docker exec instead."
+                    docker exec -it "$CONTAINER_NAME" bash
+                fi
+            else
+                # For other containers, use the standard attach method
+                docker attach "$CONTAINER_NAME"
+            fi
         else
             echo "Container $CONTAINER_NAME is now running in detached mode."
-            echo "To attach to it later, run: docker attach $CONTAINER_NAME"
+            if [ "$ENV_TYPE" = "ros2" ]; then
+                echo "To connect to it, run: ./ros2-connect $CONTAINER_NAME"
+            elif [ "$ENV_TYPE" = "yocto" ]; then
+                echo "To connect to it, run: ./yocto-connect $CONTAINER_NAME"
+            else
+                echo "To attach to it later, run: docker attach $CONTAINER_NAME"
+            fi
         fi
         
         exit 0
@@ -234,6 +283,7 @@ run_container() {
         --network=host \
         -v "$WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws" \
         -v "$WORKSPACE_DIR:/workspace" \
+        -v "$WORKSPACE_DIR:/projects" \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         -e DISPLAY \
         $ADDITIONAL_ARGS \
@@ -243,8 +293,31 @@ run_container() {
 
     # If running in detach mode but auto-attach is true, attach to the container
     if [ "$DETACH_MODE" = true ] && [ "$AUTO_ATTACH" = true ]; then
-        echo "Attaching to detached container..."
-        docker attach "$CONTAINER_NAME"
+        echo "Connecting to detached container..."
+        
+        # Give the container a moment to start
+        sleep 2
+        
+        if [ "$ENV_TYPE" = "ros2" ]; then
+            # For ROS2 containers, use our custom connection script
+            if [ -f "$(dirname "$0")/ros2-connect" ]; then
+                "$(dirname "$0")/ros2-connect" "$CONTAINER_NAME"
+            else
+                echo "Warning: ros2-connect script not found, using docker exec instead."
+                docker exec -it "$CONTAINER_NAME" bash
+            fi
+        elif [ "$ENV_TYPE" = "yocto" ]; then
+            # For Yocto containers, use our custom connection script
+            if [ -f "$(dirname "$0")/yocto-connect" ]; then
+                "$(dirname "$0")/yocto-connect" "$CONTAINER_NAME"
+            else
+                echo "Warning: yocto-connect script not found, using docker exec instead."
+                docker exec -it "$CONTAINER_NAME" bash
+            fi
+        else
+            # For other containers, use the standard attach method
+            docker attach "$CONTAINER_NAME"
+        fi
     fi
 
     # Start the container watcher in the background if this is a persistent container
