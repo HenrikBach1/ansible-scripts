@@ -24,6 +24,8 @@ AUTO_ATTACH=false
 CLEAN_START=false
 SAVE_CONFIG=false
 LIST_CONFIGS=false
+STOP_CONTAINER=false
+REMOVE_CONTAINER=false
 
 # Function to display specialized help for ROS2
 show_ros2_help() {
@@ -48,6 +50,8 @@ show_ros2_help() {
     echo "  --remove-config NAME   Remove a saved container configuration"
     echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
     echo "  --fix [NAME]           Fix a container that keeps exiting"
+    echo "  --stop [NAME]          Stop the container"
+    echo "  --remove [NAME]        Stop and remove the container"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
@@ -71,6 +75,18 @@ show_ros2_help() {
     echo ""
     echo "  # Fix a stopped container and make it keep running"
     echo "  $0 --fix"
+    echo ""
+    echo "  # Stop the default container"
+    echo "  $0 --stop"
+    echo ""
+    echo "  # Stop a specific container"
+    echo "  $0 --stop my_ros2_dev"
+    echo ""
+    echo "  # Remove the default container (stops it first if running)"
+    echo "  $0 --remove"
+    echo ""
+    echo "  # Remove a specific container"
+    echo "  $0 --remove my_ros2_dev"
     echo ""
     echo "Note: By default, containers run in detached mode."
     echo "To connect to a running container:"
@@ -108,6 +124,24 @@ for arg in "$@"; do
             exit $?
         else
             fix_container_exit "$CONTAINER_NAME"
+            exit $?
+        fi
+    fi
+    if [[ "$arg" == "--stop" ]]; then
+        if [[ -n "$2" && "$2" != -* ]]; then
+            stop_container "$2"
+            exit $?
+        else
+            stop_container "$CONTAINER_NAME"
+            exit $?
+        fi
+    fi
+    if [[ "$arg" == "--remove" ]]; then
+        if [[ -n "$2" && "$2" != -* ]]; then
+            remove_container "$2"
+            exit $?
+        else
+            remove_container "$CONTAINER_NAME"
             exit $?
         fi
     fi

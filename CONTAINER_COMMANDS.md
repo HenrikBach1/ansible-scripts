@@ -57,6 +57,22 @@ remove
 help
 ```
 
+# Container Management Options
+
+The `start-ros2-container.sh` and `start-yocto-container.sh` scripts now provide direct options for container management:
+
+```bash
+# Stop a container
+./start-ros2-container.sh --stop [CONTAINER_NAME]
+./start-yocto-container.sh --stop [CONTAINER_NAME]
+
+# Remove a container (stops it first if running)
+./start-ros2-container.sh --remove [CONTAINER_NAME]
+./start-yocto-container.sh --remove [CONTAINER_NAME]
+```
+
+If no container name is provided, these commands operate on the default container (`ros2_container` or `yocto_container`).
+
 ## Connecting to Containers
 
 There are two recommended ways to connect to containers:

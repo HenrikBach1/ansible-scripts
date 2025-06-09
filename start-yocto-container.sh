@@ -23,6 +23,8 @@ AUTO_ATTACH=false
 CLEAN_START=false
 SAVE_CONFIG=false
 LIST_CONFIGS=false
+STOP_CONTAINER=false
+REMOVE_CONTAINER=false
 
 # Function to display specialized help for Yocto
 show_yocto_help() {
@@ -46,6 +48,8 @@ show_yocto_help() {
     echo "  --remove-config NAME   Remove a saved container configuration"
     echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
     echo "  --fix [NAME]           Fix a container that keeps exiting"
+    echo "  --stop [NAME]          Stop the container"
+    echo "  --remove [NAME]        Stop and remove the container"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
@@ -66,6 +70,18 @@ show_yocto_help() {
     echo ""
     echo "  # Fix a stopped container and make it keep running"
     echo "  $0 --fix"
+    echo ""
+    echo "  # Stop the default container"
+    echo "  $0 --stop"
+    echo ""
+    echo "  # Stop a specific container"
+    echo "  $0 --stop my_yocto_dev"
+    echo ""
+    echo "  # Remove the default container (stops it first if running)"
+    echo "  $0 --remove"
+    echo ""
+    echo "  # Remove a specific container"
+    echo "  $0 --remove my_yocto_dev"
     echo ""
     echo "Note: By default, containers run in detached mode."
     echo "To connect to a running container:"
@@ -95,6 +111,22 @@ for arg in "$@"; do
     if [[ "$arg" == "--list-configs" ]]; then
         list_container_configs
         exit 0
+    fi
+    if [[ "$arg" == "--stop" ]]; then
+        if [[ -n "$2" && "$2" != "--"* ]]; then
+            stop_container "$2"
+        else
+            stop_container "$CONTAINER_NAME"
+        fi
+        exit $?
+    fi
+    if [[ "$arg" == "--remove" ]]; then
+        if [[ -n "$2" && "$2" != "--"* ]]; then
+            remove_container "$2"
+        else
+            remove_container "$CONTAINER_NAME"
+        fi
+        exit $?
     fi
     if [[ "$arg" == "--fix" ]]; then
         if [[ -n "$2" && "$2" != "--"* ]]; then

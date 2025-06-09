@@ -37,6 +37,52 @@ fix_container_exit() {
     return 0
 }
 
+# Function to stop a container
+stop_container() {
+    local CONTAINER_NAME="$1"
+    
+    # Check if container exists
+    if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container '$CONTAINER_NAME' does not exist."
+        return 1
+    fi
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container '$CONTAINER_NAME' is already stopped."
+        return 0
+    fi
+    
+    echo "Stopping container '$CONTAINER_NAME'..."
+    docker stop "$CONTAINER_NAME"
+    
+    echo "Container '$CONTAINER_NAME' has been stopped."
+    return 0
+}
+
+# Function to remove a container
+remove_container() {
+    local CONTAINER_NAME="$1"
+    
+    # Check if container exists
+    if ! docker ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container '$CONTAINER_NAME' does not exist."
+        return 1
+    fi
+    
+    # Stop the container if it's running
+    if docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Stopping container '$CONTAINER_NAME'..."
+        docker stop "$CONTAINER_NAME" >/dev/null
+    fi
+    
+    echo "Removing container '$CONTAINER_NAME'..."
+    docker rm "$CONTAINER_NAME"
+    
+    echo "Container '$CONTAINER_NAME' has been removed."
+    return 0
+}
+
 # Function to display help
 show_container_help() {
     local ENV_TYPE="$1"

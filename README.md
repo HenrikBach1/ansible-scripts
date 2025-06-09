@@ -109,6 +109,12 @@ The `start-ros2-container.sh` script allows you to create and manage a ROS2 Dock
 
 # Create a container with GPU support and custom name
 ./start-ros2-container.sh --gpu --name my_ros2_dev
+
+# Stop a running container
+./start-ros2-container.sh --stop
+
+# Stop and remove a container
+./start-ros2-container.sh --remove
 ```
 
 For detailed usage and all available options, run:
@@ -167,6 +173,12 @@ The container tags are based on the host Linux distribution (e.g., `ubuntu-22.04
 
 # Create a container with a custom workspace directory
 ./start-yocto-container.sh --workspace ~/my_yocto_workspace
+
+# Stop a running container
+./start-yocto-container.sh --stop
+
+# Stop and remove a container
+./start-yocto-container.sh --remove
 ```
 
 For detailed usage and all available options, run:
