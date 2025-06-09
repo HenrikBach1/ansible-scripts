@@ -14,6 +14,9 @@ mkdir -p /projects 2>/dev/null || true
 ln -sf /workdir /workspace 2>/dev/null || true
 ln -sf /workdir /projects 2>/dev/null || true
 
+# Create a separate directory for keep-alive processes that won't be mounted to host
+mkdir -p /var/lib/container-keepalive 2>/dev/null || true
+
 # Try to change to workspace directory, fallback to home if not possible
 if [ -d "/workdir" ] && [ -w "/workdir" ]; then
     cd /workdir
