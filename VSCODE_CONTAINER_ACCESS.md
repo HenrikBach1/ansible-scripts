@@ -44,6 +44,38 @@ The robust containers are specifically designed to work reliably with VS Code, p
    - Install VS Code extensions directly inside the container
    - Use the integrated terminal to run ROS2 commands
 
+## Command-Line Connection Methods
+
+If you need to connect to your containers from the command line (outside of VS Code), 
+there are two recommended methods:
+
+1. **Starting a container with the `--attach` option**:
+   ```bash
+   # Start and immediately connect to a container
+   ./start-ros2-container.sh --attach
+   ./start-yocto-container.sh --attach
+   ```
+
+2. **Connecting to an already running container**:
+   ```bash
+   # Connect to a running container
+   ./ros2-connect
+   ./yocto-connect
+   ```
+
+> **Important Notes**: 
+> 
+> 1. You can use EITHER the `start-X-container.sh` scripts OR the `X-connect` scripts:
+>    - The `start-X-container.sh` scripts create a new container if it doesn't exist
+>    - The `X-connect` scripts can start existing containers if they're stopped
+> 
+> 2. For the quickest workflow when a container already exists:
+>    - Simply run `./ros2-connect` or `./yocto-connect` directly
+>    - These scripts will start the container if it's stopped and connect to it
+> 
+> 3. Always use these methods instead of direct Docker commands (like `docker exec -it container_name bash`) 
+>    to ensure all container commands (`help`, `stop`, `remove`, etc.) are available in your session.
+
 ## Volume Mounts in Containers
 
 Our container scripts mount the workspace directory to multiple paths:
@@ -217,7 +249,7 @@ After running the script, follow the standard connection steps above.
    - Restart the Docker extension
    - Run `docker ps` to verify the container is actually running
 
-For more detailed information about container lifecycle and detached commands, see [DETACHED_COMMANDS.md](DETACHED_COMMANDS.md).
+For more detailed information about container lifecycle, detached commands, and troubleshooting, see [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
 
 ## Quick Recovery with recreate-ros2-container.sh
 

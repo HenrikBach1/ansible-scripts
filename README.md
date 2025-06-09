@@ -2,6 +2,9 @@
 
 This repository contains Ansible scripts and supporting shell scripts for setting up and managing development environments in Docker containers.
 
+> **Quick Start Tip**: If a container already exists, you can directly use `./ros2-connect` or `./yocto-connect` 
+> to connect to it. These scripts will start the container if needed and provide all container commands.
+
 ## Container Types
 
 This repository provides scripts for two types of development containers:
@@ -43,6 +46,34 @@ All development containers in this repository share these common features:
   - `help`: Show all available commands
 
 These features are implemented through a shared script (`run-container-common.sh`) that is used by the environment-specific container scripts. This modular approach reduces code duplication and ensures consistent behavior across different development environments.
+
+## Container Connection Methods
+
+There are two ways to connect to containers:
+
+1. **When starting a container**:
+   ```bash
+   # Start a container and automatically connect to it
+   ./start-ros2-container.sh --attach
+   ./start-yocto-container.sh --attach
+   ```
+
+2. **Connecting to an already running container**:
+   ```bash
+   # Connect to a running container
+   ./ros2-connect           # Connect to the default ROS2 container
+   ./yocto-connect          # Connect to the default Yocto container
+   
+   # Connect to a custom named container
+   ./ros2-connect my_ros2_container
+   ./yocto-connect my_yocto_container
+   ```
+
+> **Important**: You can use EITHER method to interact with containers. For example, you can:
+> - Start a container with `./start-ros2-container.sh` (without `--attach`), then connect to it later with `./ros2-connect`
+> - OR directly use `./ros2-connect` if the container already exists (it will start the container if needed)
+>
+> Always use these connection methods instead of direct Docker commands (like `docker exec`) to ensure all container commands (`help`, `stop`, `remove`, etc.) are available in your session.
 
 For detailed information on connecting to containers using VS Code, see [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md).
 
@@ -323,4 +354,4 @@ If you encounter issues with containers stopping unexpectedly when using VS Code
 ## Additional Documentation
 
 * [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md) - Instructions for accessing containers from Visual Studio Code
-* [DETACHED_COMMANDS.md](DETACHED_COMMANDS.md) - Information about running detached commands and troubleshooting container lifecycle issues
+* [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md) - Comprehensive guide to container commands, detached operation, and troubleshooting
