@@ -545,6 +545,12 @@ if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then
     bash "$(dirname "$0")/container-watch.sh" "$CONTAINER_NAME" &
 fi
 
+# Add container commands to the container
+if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
+    echo "Adding container commands to $CONTAINER_NAME..."
+    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+fi
+
 # If auto-attach is enabled, connect to the container
 if [ "$AUTO_ATTACH" = true ]; then
     echo "Connecting to the container..."

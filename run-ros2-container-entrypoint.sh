@@ -23,6 +23,14 @@ CONTAINER_ID=$(hostname)
 
 # Try to create workspace directory - don't error if it fails
 mkdir -p /workspace 2>/dev/null || true
+mkdir -p /projects 2>/dev/null || true
+
+# Create a separate directory for keep-alive processes that won't be mounted to host
+mkdir -p /var/lib/container-keepalive 2>/dev/null || true
+
+# Store all keep-alive related files in this separate directory, not in the mounted volumes
+KEEPALIVE_DIR="/var/lib/container-keepalive"
+mkdir -p $KEEPALIVE_DIR
 
 # Try to change to workspace directory, fallback to home if not possible
 if [ -d "/workspace" ] && [ -w "/workspace" ]; then
@@ -35,13 +43,87 @@ else
     mkdir -p $HOME/workspace 2>/dev/null || true
 fi
 
+# Create container command definitions in a global bashrc file
+CONTAINER_COMMANDS_FILE="/etc/container-commands.sh"
+cat > $CONTAINER_COMMANDS_FILE << 'EOF'
+#!/bin/bash
+
+# Define container control functions
+function detach() {
+  echo "Detaching from container (container keeps running)..."
+  echo "Container will continue running in the background."
+  touch /home/ubuntu/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+  exit 0
+}
+
+function stop() {
+  echo "Stopping container (container will be stopped)..."
+  touch /home/ubuntu/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+  exit 0
+}
+
+function stop_container() {
+  echo "Stopping container completely..."
+  stop
+}
+
+function remove() {
+  echo "Stopping and removing container..."
+  touch /home/ubuntu/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+  exit 0
+}
+
+function help() {
+  echo "ROS2 Container Commands:"
+  echo "------------------------"
+  echo "  - Type 'detach': Detach from container (container keeps running)"
+  echo "  - Type 'stop': Stop the container (container will be stopped)"
+  echo "  - Type 'remove': Stop and remove the container"
+  echo "  - Type 'help': Show this help message"
+  echo ""
+  echo "Extra commands:"
+  echo "  - Type 'container_help': Same as 'help'"
+  echo "  - Type 'container-help': Same as 'help'"
+  echo "  - Type 'stop_container': Same as 'stop'"
+  echo ""
+  echo "Note: When you detach, a helper script on the host will monitor and restart"
+  echo "      the container if needed, ensuring it continues running in the background."
+  echo ""
+  echo "Note: When you use 'stop', the container will be completely shut down."
+  echo "      When you use 'remove', the container will be stopped and removed."
+}
+
+function container_help() {
+  help
+}
+
+function container-help() {
+  help
+}
+
+# Export functions so they're available in all shells
+export -f detach
+export -f stop
+export -f stop_container
+export -f remove
+export -f help
+export -f container_help
+export -f container-help
+EOF
+
+# Make the commands file executable
+chmod +x $CONTAINER_COMMANDS_FILE
+
+# Add the container commands to system-wide bashrc
+echo "source $CONTAINER_COMMANDS_FILE" >> /etc/bash.bashrc
+
 # Create a simple background daemon to keep the container running
 # Use multiple keep-alive mechanisms to ensure container doesn't exit
-nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 &
+nohup bash -c "while true; do sleep 3600; done" > $KEEPALIVE_DIR/keep_alive.log 2>&1 &
 KEEP_ALIVE_PID=$!
 
 # Create a more resilient keep-alive file to ensure container doesn't stop unexpectedly
-cat > /home/ubuntu/keep_container_alive.sh << 'EOF'
+cat > $KEEPALIVE_DIR/keep_container_alive.sh << 'EOF'
 #!/bin/bash
 # Resilient keep-alive script that ensures the container stays running
 # This script is designed to be very hard to kill accidentally

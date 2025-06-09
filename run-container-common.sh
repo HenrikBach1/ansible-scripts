@@ -371,6 +371,18 @@ run_container() {
         echo "Starting container watcher for $CONTAINER_NAME..."
         bash "$(dirname "$0")/container-watch.sh" "$CONTAINER_NAME" &
     fi
+    
+    # Add container commands to the container
+    if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
+        echo "Adding container commands to $CONTAINER_NAME..."
+        # For ROS2 containers, use ubuntu as the user
+        if [ "$ENV_TYPE" = "ros2" ]; then
+            bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "ubuntu"
+        else
+            # For Yocto and other containers, use the current user
+            bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+        fi
+    fi
 }
 
 # This script should not be called directly

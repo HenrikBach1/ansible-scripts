@@ -37,15 +37,17 @@ All development containers in this repository share these common features:
 - **VS Code Integration**: Remote development with VS Code
 - **Configuration Persistence**: Save and reuse container configurations
 - **Container Commands**:
-  - `detach`: Disconnect from the container while keeping it running
-  - `stop`: Completely stop the container
-  - `remove`: Stop and remove the container completely
-  - `help`: Show all available container commands
-  - Legacy aliases: `stop_container`, `container_help`, and `container-help`
-  - `remove`: Stop and remove the container
-  - `help`: Show all available commands
+  - `container-detach`: Disconnect from the container while keeping it running
+  - `container-stop`: Completely stop the container
+  - `container-remove`: Stop and remove the container completely
+  - `container-help`: Show all available container commands
 
 These features are implemented through a shared script (`run-container-common.sh`) that is used by the environment-specific container scripts. This modular approach reduces code duplication and ensures consistent behavior across different development environments.
+
+## Helper Scripts
+
+- `add-commands-to-container.sh`: Adds container commands to an existing container that was connected to directly via VS Code's "Attach to Container" or other methods
+- `container-watch.sh`: Background process that monitors containers and handles detach/stop/remove requests
 
 ## Container Connection Methods
 

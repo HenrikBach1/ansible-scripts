@@ -8,34 +8,24 @@ These are the primary commands available in all containers:
 
 | Command | Description |
 |---------|-------------|
-| `detach` | Detach from the container (container keeps running in the background) |
-| `stop` | Stop the container (container will be stopped but not removed) |
-| `remove` | Stop and remove the container completely |
-| `help` | Show all available container commands |
-
-## Legacy/Compatibility Commands
-
-These commands are maintained for backward compatibility:
-
-| Legacy Command | Equivalent To | Description |
-|----------------|---------------|-------------|
-| `stop_container` | `stop` | Stops the container |
-| `container_help` | `help` | Shows command help |
-| `container-help` | `help` | Shows command help (hyphen version) |
+| `container-detach` | Detach from the container (container keeps running in the background) |
+| `container-stop` | Stop the container (container will be stopped but not removed) |
+| `container-remove` | Stop and remove the container completely |
+| `container-help` | Show all available container commands |
 
 ## How These Commands Work
 
 When you run any of these commands, the container creates a marker file that is detected by the container watcher script:
 
-1. For `detach`:
+1. For `container-detach`:
    - ROS2: Creates `/home/ubuntu/.container_detach_requested`
    - Yocto: Creates `/workdir/.container_detach_requested`
 
-2. For `stop`:
+2. For `container-stop`:
    - ROS2: Creates `/home/ubuntu/.container_stop_requested`
    - Yocto: Creates `/workdir/.container_stop_requested`
 
-3. For `remove`:
+3. For `container-remove`:
    - ROS2: Creates `/home/ubuntu/.container_remove_requested`
    - Yocto: Creates `/workdir/.container_remove_requested`
 
@@ -47,14 +37,20 @@ The container watcher script (`container-watch.sh`) monitors for these marker fi
 # Detach from the container while keeping it running
 detach
 
+## Examples
+
+```bash
+# Detach from the container while keeping it running
+container-detach
+
 # Stop the container
-stop
+container-stop
 
 # Stop and remove the container
-remove
+container-remove
 
 # Show help about available commands
-help
+container-help
 ```
 
 # Container Management Options
@@ -102,14 +98,18 @@ There are two recommended ways to connect to containers:
 > - Both methods ensure that all container commands (`help`, `stop`, `remove`, etc.) are available.
 > - If a container already exists, using `./ros2-connect` or `./yocto-connect` is often the quickest way to access it.
 
-## Ensuring Command Availability
+## Command Availability
 
-These commands are automatically set up when you connect to a container using:
+Container commands (`detach`, `stop`, `remove`, `help`, etc.) are available regardless of how you connect to the container:
 
-- `./ros2-connect` for ROS2 containers
-- `./yocto-connect` for Yocto containers
+- Using `./ros2-connect` or `./yocto-connect` scripts
+- Using `./start-ros2-container.sh --attach` or `./start-yocto-container.sh --attach`
+- Using VS Code's "Attach to Container" feature
+- Using direct `docker exec -it container_name bash` commands
 
-If you connect directly with `docker exec -it container_name bash`, these commands won't be available unless you've previously connected with the connect scripts.
+These commands are set up in the container's system-wide bashrc during container creation, so they will be available in all interactive shells regardless of how you connect to the container.
+
+> **Note**: If you're using an older container that was created before this update, you might need to recreate it to have these commands available in all connection methods.
 
 # Working with Detached Commands
 

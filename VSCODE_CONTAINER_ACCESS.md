@@ -29,20 +29,46 @@ The robust containers are specifically designed to work reliably with VS Code, p
 
 ## Connection Steps (Standard Containers)
 
-1. Make sure your ROS2 container is running:
+1. Make sure your container is running:
    ```bash
    ./start-ros2-container.sh
+   # or
+   ./start-yocto-container.sh
    ```
 
 2. In VS Code:
    - Click the green "Remote" icon in the bottom-left corner
-   - Select "Remote-Containers: Attach to Running Container..."
-   - Choose your container (typically named `ros2_container` or your custom name)
+   - Select "Dev Containers: Attach to Running Container..."
+   - Choose your container (typically named `ros2_container`, `yocto_container`, or your custom name)
 
 3. VS Code will connect to the container, and you can now:
    - Open the `/workspace` or `/projects` folder to access your mounted project files
    - Install VS Code extensions directly inside the container
-   - Use the integrated terminal to run ROS2 commands
+   - Use the integrated terminal to run commands
+
+## Container Commands in VS Code
+
+When using VS Code's "Attach to Container" feature, all standard container commands are available in the integrated terminal:
+
+- `container-detach`: Detach from the container (container keeps running in background)
+- `container-stop`: Stop the container (container will be stopped but not removed)
+- `container-remove`: Stop and remove the container completely
+- `container-help`: Show all available container commands
+
+These commands work in all terminal sessions, including VS Code's integrated terminal and "Attach to Container" sessions, ensuring a consistent experience across all connection methods.
+
+> **Note about Container Commands in VS Code**:
+> 
+> When connecting via VS Code's "Attach to Container" feature directly, you might need to
+> run our command setup script once to ensure all container commands are available:
+>
+> ```bash
+> # From the host, add container commands to an existing container
+> ./add-commands-to-container.sh yocto_container  # or your container name
+> ```
+>
+> After running this script, the container commands (`container-help`, `container-detach`, `container-stop`, 
+> `container-remove`, etc.) will be available in any VS Code terminal session.
 
 ## Command-Line Connection Methods
 
@@ -161,9 +187,19 @@ This will:
 2. Set up a trap to keep the container running even if the main process exits
 3. Ensure the container stays running for VS Code to connect
 
-## Using Docker Exec with the Container
+## Container Commands in VS Code and Docker Exec
 
-When you connect to the container using `docker exec -it ros2_container bash`, custom commands like `container-help` may not be available. Use the provided `docker-exec-it` script instead:
+Container commands like `help`, `detach`, `stop`, and `remove` are now available regardless of how you connect to the container, including:
+
+- When connecting through VS Code's "Attach to Container" feature
+- When using `docker exec -it container_name bash` directly
+- When using the `./ros2-connect` or `./yocto-connect` scripts
+
+These commands are set up in the container's system-wide bashrc during container creation, so they will be available in all interactive shells.
+
+> **Note for older containers**: If you're using a container created before this update, you may need to recreate it to have these commands available in all connection methods.
+
+For convenience, you can also use the provided `docker-exec-it` script:
 
 ```bash
 # Show container help
@@ -175,8 +211,6 @@ When you connect to the container using `docker exec -it ros2_container bash`, c
 # Stop the container
 ./docker-exec-it ros2_container stop
 ```
-
-This script ensures that all container commands work properly when connecting directly with Docker exec.
 
 ### ROS2 Environment in Docker Exec
 

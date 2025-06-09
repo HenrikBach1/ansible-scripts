@@ -17,92 +17,45 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     sleep 1
 fi
 
-# Create a function to generate a custom Yocto script
-cat > .yocto_temp_script.sh << 'EOF'
-#!/bin/bash
+# Clean up any potential leftover files in mounted directories
+docker exec -it "$CONTAINER_NAME" bash -c '
+# Clean up any existing keep-alive and bash files in workspace
+if [ -d "/projects/keepalive" ]; then
+  rm -rf /projects/keepalive
+fi
 
-# Define functions
-detach() {
+if [ -f "/projects/yocto-container-bashrc.sh" ]; then
+  rm -f /projects/yocto-container-bashrc.sh
+fi
+
+if [ -d "/workspace/keepalive" ]; then
+  rm -rf /workspace/keepalive
+fi
+
+if [ -f "/workspace/yocto-container-bashrc.sh" ]; then
+  rm -f /workspace/yocto-container-bashrc.sh
+fi
+'
+
+# Add container commands before connecting
+if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
+    echo "Ensuring container commands are available..."
+    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+fi
+
+# Connect to the container
+echo "Connecting to $CONTAINER_NAME..."
+docker exec -it "$CONTAINER_NAME" bash -c 'cat /etc/motd && bash --login'
+
+# Define functions - these are only used locally if the container doesn't have its own
+function container-detach() {
   echo "Detaching from container (container keeps running)..."
   echo "Container will continue running in the background."
   touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
   exit 0
 }
 
-stop() {
-  echo "Stopping container (container will be stopped)..."
-  touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
-  exit 0
+# For backwards compatibility
+function detach() {
+  container-detach
 }
-
-stop_container() {
-  echo "Stopping container completely..."
-  stop
-}
-
-remove() {
-  echo "Stopping and removing container..."
-  touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
-  exit 0
-}
-
-help() {
-  echo "Yocto Container Commands:"
-  echo "------------------------"
-  echo "  - Type 'detach': Detach from container (container keeps running)"
-  echo "  - Type 'stop': Stop the container (container will be stopped)"
-  echo "  - Type 'remove': Stop and remove the container"
-  echo "  - Type 'help': Show this help message"
-  echo ""
-  echo "Extra commands:"
-  echo "  - Type 'container_help': Same as 'help'"
-  echo "  - Type 'container-help': Same as 'help'"
-  echo "  - Type 'stop_container': Same as 'stop'"
-  echo ""
-  echo "Note: When you detach, a helper script on the host will monitor and restart"
-  echo "      the container if needed, ensuring it continues running in the background."
-  echo ""
-  echo "Note: When you use 'stop', the container will be completely shut down."
-  echo "      When you use 'remove', the container will be stopped and removed."
-}
-
-container_help() {
-  help
-}
-
-# Also support container-help with a hyphen for backward compatibility
-container-help() {
-  help
-}
-
-# Export the functions so they're available in the shell
-export -f detach
-export -f stop
-export -f stop_container
-export -f remove
-export -f help
-export -f container_help
-export -f container-help
-
-# Show help message on login
-echo "Welcome to the Yocto Container!"
-echo "Use these commands to control the container:"
-echo "  - Type 'detach' to detach from the container (container keeps running)"
-echo "  - Type 'stop' to stop the container"
-echo "  - Type 'remove' to stop and remove the container"
-echo "  - Type 'help' for more information"
-echo ""
-
-# Start bash with the functions defined
-exec bash
-EOF
-
-chmod +x .yocto_temp_script.sh
-
-# Connect to the container with custom bashrc support
-echo "Connecting to $CONTAINER_NAME..."
-docker cp .yocto_temp_script.sh "$CONTAINER_NAME":/tmp/yocto_container_functions.sh
-docker exec -it "$CONTAINER_NAME" bash /tmp/yocto_container_functions.sh
-
-# Clean up
-rm -f .yocto_temp_script.sh

@@ -17,6 +17,10 @@ ln -sf /workdir /projects 2>/dev/null || true
 # Create a separate directory for keep-alive processes that won't be mounted to host
 mkdir -p /var/lib/container-keepalive 2>/dev/null || true
 
+# Store all keep-alive related files in this separate directory, not in the mounted volumes
+KEEPALIVE_DIR="/var/lib/container-keepalive"
+mkdir -p $KEEPALIVE_DIR
+
 # Try to change to workspace directory, fallback to home if not possible
 if [ -d "/workdir" ] && [ -w "/workdir" ]; then
     cd /workdir
@@ -28,13 +32,98 @@ else
     mkdir -p $HOME/workdir 2>/dev/null || true
 fi
 
+# Create container command definitions in a global bashrc file
+CONTAINER_COMMANDS_FILE="/etc/container-commands.sh"
+cat > $CONTAINER_COMMANDS_FILE << 'EOF'
+#!/bin/bash
+
+# Define container control functions
+function detach() {
+  echo "Detaching from container (container keeps running)..."
+  echo "Container will continue running in the background."
+  touch $KEEPALIVE_DIR/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+  exit 0
+}
+
+function stop() {
+  echo "Stopping container (container will be stopped)..."
+  touch $KEEPALIVE_DIR/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+  exit 0
+}
+
+function stop_container() {
+  echo "Stopping container completely..."
+  stop
+}
+
+function remove() {
+  echo "Stopping and removing container..."
+  touch $KEEPALIVE_DIR/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+  exit 0
+}
+
+function help() {
+  echo "Yocto Container Commands:"
+  echo "------------------------"
+  echo "  - Type 'detach': Detach from container (container keeps running)"
+  echo "  - Type 'stop': Stop the container (container will be stopped)"
+  echo "  - Type 'remove': Stop and remove the container"
+  echo "  - Type 'help': Show this help message"
+  echo ""
+  echo "Extra commands:"
+  echo "  - Type 'container_help': Same as 'help'"
+  echo "  - Type 'container-help': Same as 'help'"
+  echo "  - Type 'stop_container': Same as 'stop'"
+  echo ""
+  echo "Note: When you detach, a helper script on the host will monitor and restart"
+  echo "      the container if needed, ensuring it continues running in the background."
+  echo ""
+  echo "Note: When you use 'stop', the container will be completely shut down."
+  echo "      When you use 'remove', the container will be stopped and removed."
+}
+
+function container_help() {
+  help
+}
+
+function container-help() {
+  help
+}
+
+# Export functions so they're available in all shells
+export -f detach
+export -f stop
+export -f stop_container
+export -f remove
+export -f help
+export -f container_help
+export -f container-help
+EOF
+
+# Make the commands file executable
+chmod +x $CONTAINER_COMMANDS_FILE
+
+# Explicitly add the container commands to system-wide bashrc if not already there
+if ! grep -q "source $CONTAINER_COMMANDS_FILE" /etc/bash.bashrc; then
+    echo "# Source container commands for all shells" >> /etc/bash.bashrc
+    echo "source $CONTAINER_COMMANDS_FILE" >> /etc/bash.bashrc
+    echo "# Added commands sourcing to /etc/bash.bashrc"
+fi
+
+# Create a backup of the sourcing in another file for redundancy
+echo "source $CONTAINER_COMMANDS_FILE" > /etc/profile.d/container-commands.sh
+chmod +x /etc/profile.d/container-commands.sh
+
+# Also ensure commands are available for non-interactive shells
+echo "source $CONTAINER_COMMANDS_FILE" >> /etc/profile
+
 # Create a simple background daemon to keep the container running
 # Use multiple keep-alive mechanisms to ensure container doesn't exit
-nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 &
+nohup bash -c "while true; do sleep 3600; done" > $KEEPALIVE_DIR/keep_alive.log 2>&1 &
 KEEP_ALIVE_PID=$!
 
 # Create a more resilient keep-alive file to ensure container doesn't stop unexpectedly
-cat > /home/user/keep_container_alive.sh << 'EOF'
+cat > $KEEPALIVE_DIR/keep_container_alive.sh << 'EOF'
 #!/bin/bash
 # Resilient keep-alive script that ensures the container stays running
 # This script is designed to be very hard to kill accidentally
@@ -44,7 +133,7 @@ DEBUG=0
 
 function log_debug() {
     if [ "$DEBUG" -ne 0 ]; then
-        echo "[keep-alive] $1" >> /home/user/keep_alive.log
+        echo "[keep-alive] $1" >> $KEEPALIVE_DIR/keep_alive.log
     fi
 }
 
@@ -68,18 +157,27 @@ done
 EOF
 
 # Make the script executable
-chmod +x /home/user/keep_container_alive.sh
+chmod +x $KEEPALIVE_DIR/keep_container_alive.sh
 
 # Start the keep-alive script in the background with nohup
-nohup /home/user/keep_container_alive.sh >/dev/null 2>&1 &
+nohup $KEEPALIVE_DIR/keep_container_alive.sh > $KEEPALIVE_DIR/keep_alive_output.log 2>&1 &
 KEEP_ALIVE_PID2=$!
 
 # Log both keep-alive PIDs for reference
-echo "$KEEP_ALIVE_PID $KEEP_ALIVE_PID2" > /home/user/.container_keep_alive_pids
+echo "$KEEP_ALIVE_PID $KEEP_ALIVE_PID2" > $KEEPALIVE_DIR/container_keep_alive_pids
 
-# Display help message
-echo ""
-echo "Yocto Container Commands:"
+# Welcome message for direct docker exec connections
+cat > /etc/motd << 'EOF'
+
+Yocto Container Commands:
+------------------------
+  - Type 'detach': Detach from container (container keeps running)
+  - Type 'stop': Stop the container (container will be stopped)
+  - Type 'remove': Stop and remove the container
+  - Type 'help': Show this help message
+
+To access your mounted files, navigate to /workspace or /projects.
+EOF
 echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
 echo "  - Type 'stop': Stop the container completely (container will shut down)"
 echo "  - Press Ctrl+P followed by Ctrl+Q: Standard Docker detach sequence"
@@ -97,7 +195,7 @@ detach() {
     echo "Container will continue running in the background."
     
     # Create a marker file to signal we want to detach
-    touch $HOME/.container_detach_requested
+    touch $KEEPALIVE_DIR/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
     
     # Force disconnect from tty while ensuring container keeps running
     # The background daemon started at container launch will keep it alive
@@ -119,7 +217,7 @@ stop() {
     
     # Create a marker file to indicate we want to stop the container
     # The container-watch.sh script will see this and stop the container
-    touch $HOME/.container_stop_requested
+    touch $KEEPALIVE_DIR/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
     
     # Kill the keep-alive process if we have it
     if [ -n "$KEEP_ALIVE_PID" ]; then
@@ -145,8 +243,8 @@ echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> $HOME/.bashrc
 cat > $HOME/.bash_logout << 'EOF'
 # This script runs when the shell exits
 # Create a marker file to signal we want to detach (unless we used 'stop')
-if [ ! -f $HOME/.container_stop_requested ]; then
-    touch $HOME/.container_detach_requested
+if [ ! -f $KEEPALIVE_DIR/.container_stop_requested ]; then
+    touch $KEEPALIVE_DIR/.container_detach_requested
     echo "Shell exiting, but container will keep running in the background."
 fi
 EOF
@@ -158,7 +256,7 @@ echo "Detaching from container (container keeps running)..."
 echo "Container will continue running in the background."
 
 # Create a marker file to signal we want to detach
-touch $HOME/.container_detach_requested
+touch $KEEPALIVE_DIR/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
 
 # Force disconnect from tty while ensuring container keeps running
 kill -HUP $PPID || builtin exit 0
@@ -170,7 +268,7 @@ echo "Stopping container..."
 echo "Container will be completely stopped (not just detached)."
 
 # Create a marker file to indicate we want to stop the container
-touch $HOME/.container_stop_requested
+touch $KEEPALIVE_DIR/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
 
 # Kill any background processes keeping the container alive
 pkill -f "sleep 3600" || true
