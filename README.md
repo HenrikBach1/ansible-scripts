@@ -169,6 +169,7 @@ The `start-yocto-container.sh` script allows you to create and manage a Yocto Pr
 - **Build Environment**: Container provides all necessary tools to build Yocto Project
 - **CROPS/poky Base**: Uses the CROPS/poky container which provides a consistent build environment
 - **Workspace Mounting**: Your projects directory is mounted automatically
+- **Clean Workspace**: Container system files are kept in /tmp to avoid workspace pollution
 - **Cache Sharing**: Optional caching of downloads and sstate for faster builds
 - **Layer Management**: Tools for working with Yocto layers
 

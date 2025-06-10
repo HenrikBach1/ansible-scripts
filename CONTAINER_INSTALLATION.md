@@ -22,10 +22,10 @@ The `add-commands-to-container.sh` script automatically installs these commands 
 
 2. **System-wide installation**: When possible, commands are also installed system-wide
    - Creates symlinks in `/usr/local/bin/`
-   - Adds global hooks in `/etc/profile.d/`
+   - Adds global hooks in `/etc/profile.d/` when permissions allow
 
 3. **Fallback mechanisms**: For containers with restrictive permissions
-   - Creates commands in `/workdir/.container_commands/`
+   - Creates commands in `/tmp/.container_commands/`
    - Creates commands in `/tmp/bin/`
    - Updates global PATH settings when possible
 
@@ -34,7 +34,7 @@ The `add-commands-to-container.sh` script automatically installs these commands 
 The script includes special handling for different container types:
 
 - **ROS2 containers**: Commands are installed for the `ubuntu` user by default
-- **Yocto/CROPS containers**: Commands are installed in shared directories accessible to all users
+- **Yocto/CROPS containers**: Commands are installed in `/tmp` directories to avoid workspace pollution
 
 ## Troubleshooting
 
@@ -45,7 +45,7 @@ If container commands are not available in your session:
    # Look for commands in standard locations
    ls -la $HOME/bin/ | grep container
    ls -la /usr/local/bin/ | grep container
-   ls -la /workdir/.container_commands/ 2>/dev/null || echo "Not found"
+   ls -la /tmp/.container_commands/ 2>/dev/null || echo "Not found"
    ```
 
 2. **Manually install commands**:
@@ -54,9 +54,9 @@ If container commands are not available in your session:
    ./add-commands-to-container.sh container_name root
    ```
 
-3. **For CROPS/poky containers**, ensure the `/workdir` directory is accessible and that the commands are installed there:
+3. **For CROPS/poky containers**, ensure the commands are installed in the appropriate location:
    ```bash
-   ls -la /workdir/.container_commands/
+   ls -la /tmp/.container_commands/
    ```
 
 ## How It Works

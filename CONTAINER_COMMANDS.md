@@ -20,19 +20,16 @@ When you run any of these commands, the container creates a marker file that is 
 1. For `container-detach`:
    - Creates a marker file in one of these locations (in order of preference):
      - `$HOME/.container_detach_requested`
-     - `/workdir/.container_detach_requested`
      - `/tmp/.container_detach_requested`
 
 2. For `container-stop`:
    - Creates a marker file in one of these locations (in order of preference):
      - `$HOME/.container_stop_requested`
-     - `/workdir/.container_stop_requested`
      - `/tmp/.container_stop_requested`
 
 3. For `container-remove`:
    - Creates a marker file in one of these locations (in order of preference):
      - `$HOME/.container_remove_requested`
-     - `/workdir/.container_remove_requested`
      - `/tmp/.container_remove_requested`
 
 The container watcher script (`container-watch.sh`) monitors for these marker files and takes the appropriate action.
@@ -485,14 +482,15 @@ The `add-commands-to-yocto-container.sh` script:
 
 ### Installation Locations
 
-Commands are installed in the following locations (in order of preference):
+Commands are installed in the following locations:
 
-1. `/workdir/.container_commands/` (if /workdir exists and is writable)
-2. `/tmp/.container_commands/` (fallback location)
+1. `/tmp/.container_commands/` (primary location to avoid workspace pollution)
 
 Symlinks are also created in:
 - `/usr/local/bin/` (if writable)
 - `/tmp/bin/` (fallback location)
+
+This installation approach ensures your workspace remains clean and free from system files.
 
 ## Troubleshooting CROPS/Poky Container Commands
 

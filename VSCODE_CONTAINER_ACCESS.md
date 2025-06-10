@@ -114,7 +114,7 @@ Our container scripts mount the workspace directory to multiple paths:
 - `/projects`: An alternate path **required** for VS Code Remote Development and many extensions
 - Container-specific paths:
   - ROS2: `/home/ubuntu/ros2_ws`
-  - Yocto: `/workdir` and `/home/ubuntu/yocto_ws`
+  - Yocto: `/workdir`
 
 These multiple mounts ensure maximum compatibility with different tools and workflows. The `/projects` directory is particularly important for VS Code Remote Development, as many extensions expect files to be there.
 

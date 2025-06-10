@@ -141,12 +141,8 @@ echo "Setting up commands in container..."
 
 # First phase - create directories and copy scripts
 docker exec "$CONTAINER_NAME" bash -c '
-    # Determine command directory
-    if [ -d /workdir ] && [ -w /workdir ]; then
-        CMD_DIR=/workdir/.container_commands
-    else
-        CMD_DIR=/tmp/.container_commands
-    fi
+    # Always use /tmp to avoid polluting the workspace
+    CMD_DIR=/tmp/.container_commands
     
     # Ensure directory exists and is writable
     mkdir -p "$CMD_DIR"
@@ -163,12 +159,8 @@ docker exec "$CONTAINER_NAME" bash -c '
 
 # Second phase - create symlinks and aliases
 docker exec "$CONTAINER_NAME" bash -c '
-    # Determine command directory again
-    if [ -d /workdir/.container_commands ]; then
-        CMD_DIR=/workdir/.container_commands
-    else
-        CMD_DIR=/tmp/.container_commands
-    fi
+    # Determine command directory - always use /tmp to avoid workspace pollution
+    CMD_DIR=/tmp/.container_commands
     
     # Create symlinks in common locations
     mkdir -p /tmp/bin
@@ -189,12 +181,8 @@ docker exec "$CONTAINER_NAME" bash -c '
 
 # Third phase - add to profile.d and bashrc
 docker exec "$CONTAINER_NAME" bash -c '
-    # Determine command directory again
-    if [ -d /workdir/.container_commands ]; then
-        CMD_DIR=/workdir/.container_commands
-    else
-        CMD_DIR=/tmp/.container_commands
-    fi
+    # Determine command directory - always use /tmp to avoid workspace pollution
+    CMD_DIR=/tmp/.container_commands
     
     # Add to profile.d if possible
     if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then

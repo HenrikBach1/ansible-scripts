@@ -488,19 +488,24 @@ else
     PERSISTENCE_FLAG=""
 fi
 
-# Run the container with a modified command that ensures it stays alive
-# First, copy the bashrc file to the current directory if needed
-if [ -f "$SCRIPT_DIR/yocto-container-bashrc.sh" ] && [ "$SCRIPT_DIR" != "$(pwd)" ]; then
-    cp "$SCRIPT_DIR/yocto-container-bashrc.sh" ./yocto-container-bashrc.sh
+# Clean up any container-related files that might be in the workspace
+# This prevents workspace pollution from previous container runs
+if [ -d "$WORKSPACE_DIR" ]; then
+    echo "Cleaning up container system files from workspace..."
+    # Remove container system files if they exist
+    rm -f "$WORKSPACE_DIR/container-init.sh" 2>/dev/null || true
+    rm -f "$WORKSPACE_DIR/yocto-container-bashrc.sh" 2>/dev/null || true
+    rm -rf "$WORKSPACE_DIR/keepalive" 2>/dev/null || true
 fi
 
+# Run the container with a modified command that ensures it stays alive
 docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     --privileged \
     --network=host \
     -v "$WORKSPACE_DIR:/workdir" \
     -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
-    -v "$SCRIPT_DIR/yocto-container-bashrc.sh:/workdir/yocto-container-bashrc.sh" \
+    -v "$SCRIPT_DIR/yocto-container-bashrc.sh:/opt/yocto-container-bashrc.sh:ro" \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -e DISPLAY \
     $ADDITIONAL_ARGS \
@@ -525,13 +530,13 @@ docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
              echo "" && \
              # First, find where we can write files
              echo "Setting up keep-alive processes..." && \
-             mkdir -p /workdir/keepalive && \
-             chmod 777 /workdir/keepalive && \
+             mkdir -p /tmp/container_keepalive && \
+             chmod 777 /tmp/container_keepalive && \
              # Create and run a robust keep-alive process
-             echo "#!/bin/bash" > /workdir/keepalive/keep_alive.sh && \
-             echo "trap \"echo Keeping container alive; exec tail -f /dev/null\" EXIT" >> /workdir/keepalive/keep_alive.sh && \
-             echo "exec tail -f /dev/null" >> /workdir/keepalive/keep_alive.sh && \
-             chmod +x /workdir/keepalive/keep_alive.sh && \
+             echo "#!/bin/bash" > /tmp/container_keepalive/keep_alive.sh && \
+             echo "trap \"echo Keeping container alive; exec tail -f /dev/null\" EXIT" >> /tmp/container_keepalive/keep_alive.sh && \
+             echo "exec tail -f /dev/null" >> /tmp/container_keepalive/keep_alive.sh && \
+             chmod +x /tmp/container_keepalive/keep_alive.sh && \
              echo "Starting keep-alive process to ensure container stays running..." && \
              nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 & \
              # Create a second keep-alive process as a backup
