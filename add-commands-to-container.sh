@@ -70,11 +70,16 @@ docker cp "$TMP_COMMANDS_FILE" "$CONTAINER_NAME:/tmp/container-commands.sh"
 install_for_all_users() {
     echo "Installing commands for all users in the container..."
     
-    # Create system-wide commands in /usr/local/bin
+    # Create a temporary directory that will be writable
     docker exec "$CONTAINER_NAME" bash -c "
-        echo 'Installing system-wide commands in /usr/local/bin...'
+        # Create directory for container commands that will be writable
+        COMMANDS_DIR=/tmp/container-commands
+        mkdir -p \$COMMANDS_DIR
+        
+        echo 'Creating container command scripts in \$COMMANDS_DIR...'
+        
         # Create the command scripts
-        cat > /usr/local/bin/container-detach << 'EOC'
+        cat > \$COMMANDS_DIR/container-detach << 'EOC'
 #!/bin/bash
 echo 'Detaching from container (container keeps running)...'
 echo 'Container will continue running in the background.'
@@ -82,7 +87,7 @@ touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.containe
 exit 0
 EOC
 
-        cat > /usr/local/bin/container-stop << 'EOC'
+        cat > \$COMMANDS_DIR/container-stop << 'EOC'
 #!/bin/bash
 echo 'Stopping container...'
 echo 'Container will be stopped but can be started again.'
@@ -90,7 +95,7 @@ touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_
 exit 0
 EOC
 
-        cat > /usr/local/bin/container-remove << 'EOC'
+        cat > \$COMMANDS_DIR/container-remove << 'EOC'
 #!/bin/bash
 echo 'Removing container...'
 echo 'Container will be stopped and removed permanently.'
@@ -98,7 +103,7 @@ touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.containe
 exit 0
 EOC
 
-        cat > /usr/local/bin/container-help << 'EOC'
+        cat > \$COMMANDS_DIR/container-help << 'EOC'
 #!/bin/bash
 echo 'Container Commands:'
 echo '  - container-detach: Detach from the container (container keeps running)'
@@ -108,116 +113,191 @@ echo '  - container-help: Show this help message'
 EOC
 
         # Make all command scripts executable
-        chmod 755 /usr/local/bin/container-* || true
+        chmod 755 \$COMMANDS_DIR/container-* || true
         
-        # Create global profile script to display help on login
-        if [ -d /etc/profile.d ]; then
-            echo 'Creating global profile script...'
-            cat > /etc/profile.d/container-commands.sh << 'EOC'
+        # Create init script that users can source
+        cat > \$COMMANDS_DIR/container-init.sh << 'EOC'
 #!/bin/bash
-# Container commands helper
-if [ -x /usr/local/bin/container-help ]; then
-    # Only show help if we're in an interactive shell
-    if [ -t 0 ]; then
-        /usr/local/bin/container-help
-    fi
-fi
-EOC
-            chmod 755 /etc/profile.d/container-commands.sh
-        fi
-        
-        # Create a fallback directory for systems where /usr/local/bin is not in the PATH
-        if [ -d /etc/profile.d ]; then
-            echo 'Ensuring /usr/local/bin is in PATH for all users...'
-            cat > /etc/profile.d/container-path.sh << 'EOC'
-#!/bin/bash
-# Ensure /usr/local/bin is in PATH
-case \":${PATH}:\" in
-    *:/usr/local/bin:*) ;;
-    *) export PATH=/usr/local/bin:$PATH ;;
-esac
-EOC
-            chmod 755 /etc/profile.d/container-path.sh
-        fi
-        
-        # For systems without profile.d, add to global bashrc if possible
-        if [ ! -d /etc/profile.d ] && [ -f /etc/bash.bashrc ] && [ -w /etc/bash.bashrc ]; then
-            echo 'Adding container commands to global bashrc...'
-            grep -q 'container-help' /etc/bash.bashrc || cat >> /etc/bash.bashrc << 'EOC'
+# Container commands initialization
+# Source this file to add container commands to your PATH
 
-# Container commands helper
-if [ -x /usr/local/bin/container-help ]; then
-    # Only show help if we're in an interactive shell
-    if [ -t 0 ]; then
-        /usr/local/bin/container-help
-    fi
-fi
-
-# Ensure /usr/local/bin is in PATH
-case \":${PATH}:\" in
-    *:/usr/local/bin:*) ;;
-    *) export PATH=/usr/local/bin:$PATH ;;
-esac
-EOC
-        fi
-        
-        # Create aliases for home directories of existing users
-        echo 'Adding aliases to user home directories...'
-        for user_home in /home/*/ /root/; do
-            user_bashrc=\"${user_home}.bashrc\"
-            if [ -f \"$user_bashrc\" ] && [ -w \"$user_bashrc\" ]; then
-                username=$(basename \"$user_home\")
-                echo \"Setting up commands for user $username...\"
-                
-                # Remove any existing entries to avoid duplication
-                sed -i '/container-help/d' \"$user_bashrc\" 2>/dev/null || true
-                
-                # Add new entries
-                cat >> \"$user_bashrc\" << 'EOC'
-
-# Container commands helper
-if [ -x /usr/local/bin/container-help ]; then
-    # Only show help if we're in an interactive shell
-    if [ -t 0 ]; then
-        /usr/local/bin/container-help
-    fi
-fi
-
-# Ensure /usr/local/bin is in PATH
-case \":${PATH}:\" in
-    *:/usr/local/bin:*) ;;
-    *) export PATH=/usr/local/bin:$PATH ;;
-esac
-EOC
-            fi
-        done
-        
-        # Create fallback directory in /tmp for systems where /usr/local/bin is not writable
-        echo 'Creating fallback commands in /tmp...'
-        mkdir -p /tmp/container-commands
-        cp /usr/local/bin/container-* /tmp/container-commands/ 2>/dev/null || true
-        chmod 755 /tmp/container-commands/* 2>/dev/null || true
-        
-        # Add fallback to global profile
-        if [ -d /etc/profile.d ]; then
-            cat > /etc/profile.d/container-fallback.sh << 'EOC'
-#!/bin/bash
-# Fallback for container commands
-if [ ! -x /usr/local/bin/container-help ] && [ -d /tmp/container-commands ]; then
+# Add commands directory to PATH if not already there
+if [[ \":$PATH:\" != *\":/tmp/container-commands:\"* ]]; then
     export PATH=/tmp/container-commands:$PATH
-    # Only show help if we're in an interactive shell
-    if [ -t 0 ] && [ -x /tmp/container-commands/container-help ]; then
+fi
+
+# Also add fallback location
+if [[ \":$PATH:\" != *\":/tmp/.container_commands:\"* ]]; then
+    export PATH=/tmp/.container_commands:$PATH
+fi
+
+# Show help if we're in an interactive shell
+if [ -t 0 ]; then
+    if [ -x /tmp/container-commands/container-help ]; then
         /tmp/container-commands/container-help
     fi
 fi
 EOC
-            chmod 755 /etc/profile.d/container-fallback.sh
+        chmod 755 \$COMMANDS_DIR/container-init.sh || true
+        
+        # Try to create a profile.d script, but don't fail if we can't
+        if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+            echo 'Creating global profile script...'
+            cat > /etc/profile.d/container-init.sh << 'EOC'
+#!/bin/bash
+# Container commands initialization
+
+# Add commands directory to PATH if not already there
+if [[ \":$PATH:\" != *\":/tmp/container-commands:\"* ]]; then
+    export PATH=/tmp/container-commands:$PATH
+fi
+
+# Also add fallback location
+if [[ \":$PATH:\" != *\":/tmp/.container_commands:\"* ]]; then
+    export PATH=/tmp/.container_commands:$PATH
+fi
+
+# Show help if we're in an interactive shell
+if [ -t 0 ]; then
+    if [ -x /tmp/container-commands/container-help ]; then
+        /tmp/container-commands/container-help
+    fi
+fi
+EOC
+            chmod 755 /etc/profile.d/container-init.sh 2>/dev/null || true
+            echo 'Created global profile script.'
+        else
+            echo 'Unable to create global profile script (no permission). Using fallback.'
         fi
         
-        echo 'Container commands installed system-wide successfully'
+        # Try to add to /etc/bash.bashrc if we can
+        if [ -f /etc/bash.bashrc ] && [ -w /etc/bash.bashrc ]; then
+            if ! grep -q 'container-commands' /etc/bash.bashrc; then
+                echo 'Adding to global bash.bashrc...'
+                echo '
+# Container commands initialization
+if [ -f /tmp/container-commands/container-init.sh ]; then
+    source /tmp/container-commands/container-init.sh
+fi' >> /etc/bash.bashrc
+                echo 'Added to global bash.bashrc.'
+            fi
+        fi
+        
+        # Add to all user bashrc files we can find and have permission to modify
+        echo 'Adding to user bashrc files...'
+        
+        # Detect root home directory
+        ROOT_HOME=$(getent passwd root | cut -d: -f6)
+        if [ -z "$ROOT_HOME" ]; then
+            ROOT_HOME="/root"  # Default if we couldn't detect it
+        fi
+        
+        for bashrc in /home/*/.bashrc "$ROOT_HOME/.bashrc"; do
+            if [ -f "$bashrc" ] && [ -w "$bashrc" ]; then
+                username=$(dirname "$bashrc" | xargs basename)
+                echo "Setting up commands for user $username..."
+                
+                # Remove any existing entries to avoid duplication
+                sed -i '/container-commands/d' "$bashrc" 2>/dev/null || true
+                sed -i '/container-help/d' "$bashrc" 2>/dev/null || true
+                
+                # Add new entry
+                echo '
+# Container commands initialization
+if [ -f /tmp/container-commands/container-init.sh ]; then
+    source /tmp/container-commands/container-init.sh
+fi' >> "$bashrc"
+                echo "Updated $bashrc"
+            fi
+        done
+        
+        # Add to /etc/skel/.bashrc if possible for new users
+        if [ -f /etc/skel/.bashrc ] && [ -w /etc/skel/.bashrc ]; then
+            echo 'Adding to skeleton bashrc for new users...'
+            if ! grep -q 'container-commands' /etc/skel/.bashrc; then
+                echo '
+# Container commands initialization
+if [ -f /tmp/container-commands/container-init.sh ]; then
+    source /tmp/container-commands/container-init.sh
+fi' >> /etc/skel/.bashrc
+                echo 'Updated skeleton bashrc.'
+            fi
+        fi
+        
+        # Create symlinks in /usr/local/bin if we have permissions
+        if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+            echo 'Creating symlinks in /usr/local/bin...'
+            ln -sf /tmp/container-commands/container-detach /usr/local/bin/container-detach 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-stop /usr/local/bin/container-stop 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-remove /usr/local/bin/container-remove 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-help /usr/local/bin/container-help 2>/dev/null || true
+            echo 'Created symlinks in /usr/local/bin.'
+        else
+            echo 'Cannot create symlinks in /usr/local/bin (no permission).'
+        fi
+        
+        # Create symlinks in /workdir if it exists
+        if [ -d /workdir ] && [ -w /workdir ]; then
+            echo 'Creating symlinks in /workdir...'
+            mkdir -p /workdir/bin 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-detach /workdir/bin/container-detach 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-stop /workdir/bin/container-stop 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-remove /workdir/bin/container-remove 2>/dev/null || true
+            ln -sf /tmp/container-commands/container-help /workdir/bin/container-help 2>/dev/null || true
+            echo 'Created symlinks in /workdir/bin.'
+        fi
+        
+        # Additional fallback location in /tmp/.container_commands for very restricted environments
+        mkdir -p /tmp/.container_commands 2>/dev/null || true
+        ln -sf /tmp/container-commands/container-detach /tmp/.container_commands/container-detach 2>/dev/null || true
+        ln -sf /tmp/container-commands/container-stop /tmp/.container_commands/container-stop 2>/dev/null || true
+        ln -sf /tmp/container-commands/container-remove /tmp/.container_commands/container-remove 2>/dev/null || true
+        ln -sf /tmp/container-commands/container-help /tmp/.container_commands/container-help 2>/dev/null || true
+        chmod +x /tmp/.container_commands/* 2>/dev/null || true
+        echo 'Created fallback commands in /tmp/.container_commands'
+        
+        echo 'Container commands installed successfully in /tmp/container-commands'
     "
     
-    return $?
+    # Copy the init script to a location where it can be sourced on container startup
+    # This provides a backup method in case the container's /etc is not writable
+    docker cp "$TMP_COMMANDS_DIR/install-commands.sh" "$CONTAINER_NAME:/tmp/container-commands/install-commands.sh" 2>/dev/null || true
+    
+    # Create a simple init script that can be added directly to the container
+    cat > "$TMP_COMMANDS_DIR/container-init.sh" << 'EOF'
+#!/bin/bash
+# Container commands initialization script
+# This is added by add-commands-to-container.sh
+
+# Add container commands to PATH
+if [[ ":$PATH:" != *":/tmp/container-commands:"* ]]; then
+    export PATH=/tmp/container-commands:$PATH
+fi
+
+# Also add fallback location
+if [[ ":$PATH:" != *":/tmp/.container_commands:"* ]]; then
+    export PATH=/tmp/.container_commands:$PATH
+fi
+
+# Show help if in interactive shell
+if [ -t 0 ]; then
+    if [ -x /tmp/container-commands/container-help ]; then
+        /tmp/container-commands/container-help
+    fi
+fi
+EOF
+
+    # Copy the init script to the container with fallback locations
+docker cp "$TMP_COMMANDS_DIR/container-init.sh" "$CONTAINER_NAME:/tmp/container-init.sh" 2>/dev/null || true
+docker exec "$CONTAINER_NAME" bash -c "mkdir -p /tmp/container-commands/ 2>/dev/null || true"
+docker exec "$CONTAINER_NAME" bash -c "cp /tmp/container-init.sh /tmp/container-commands/container-init.sh 2>/dev/null || true"
+docker exec "$CONTAINER_NAME" bash -c "chmod 755 /tmp/container-init.sh /tmp/container-commands/container-init.sh 2>/dev/null || true"
+    docker cp "$TMP_COMMANDS_DIR/container-init.sh" "$CONTAINER_NAME:/etc/profile.d/container-init.sh" 2>/dev/null || true
+    
+    # Try to make it executable, but don't fail if we can't
+    docker exec "$CONTAINER_NAME" bash -c "chmod 755 /etc/profile.d/container-init.sh" 2>/dev/null || true
+    
+    return 0
 }
 
 # Create script to install the commands
@@ -229,59 +309,77 @@ cat > "$TMP_COMMANDS_DIR/install-commands.sh" << 'EOF'
 if [ "$(id -u)" -eq 0 ]; then
   RUNNING_AS_ROOT=true
   echo "Running installation as root"
+  
+  # Detect root home directory explicitly
+  ROOT_HOME=$(getent passwd root | cut -d: -f6)
+  if [ -z "$ROOT_HOME" ]; then
+      ROOT_HOME="/root"  # Default if we couldn't detect it
+  fi
+  echo "Root home directory: $ROOT_HOME"
+  
+  # Make sure we have home directory and bin subdirectory
+  mkdir -p "$ROOT_HOME/bin" || { echo "Failed to create $ROOT_HOME/bin directory"; exit 1; }
+  mkdir -p "$ROOT_HOME/.container" || { echo "Failed to create $ROOT_HOME/.container directory"; exit 1; }
 else
   RUNNING_AS_ROOT=false
   echo "Running installation as regular user"
+  
+  # Make sure we have home directory and bin subdirectory
+  mkdir -p "$HOME/bin" || { echo "Failed to create $HOME/bin directory"; exit 1; }
+  mkdir -p "$HOME/.container" || { echo "Failed to create $HOME/.container directory"; exit 1; }
 fi
 
-# Make sure we have home directory and bin subdirectory
-mkdir -p $HOME/bin || { echo "Failed to create $HOME/bin directory"; exit 1; }
-mkdir -p $HOME/.container || { echo "Failed to create $HOME/.container directory"; exit 1; }
+# Set home directory based on whether we're root or not
+if [ "$RUNNING_AS_ROOT" = true ]; then
+  USER_HOME="$ROOT_HOME"
+else
+  USER_HOME="$HOME"
+fi
 
 # Copy the commands file
-cp /tmp/container-commands.sh $HOME/.container/ || { echo "Failed to copy container-commands.sh"; exit 1; }
+cp /tmp/container-commands.sh "$USER_HOME/.container/" || { echo "Failed to copy container-commands.sh"; exit 1; }
 
 # Make it executable
-chmod +x $HOME/.container/container-commands.sh || { echo "Failed to make container-commands.sh executable"; exit 1; }
+chmod +x "$USER_HOME/.container/container-commands.sh" || { echo "Failed to make container-commands.sh executable"; exit 1; }
 
 # Add source to bashrc if not already there
-if ! grep -q "source.*container-commands.sh" $HOME/.bashrc; then
-  echo "source \$HOME/.container/container-commands.sh" >> $HOME/.bashrc || { echo "Failed to update .bashrc"; exit 1; }
+if ! grep -q "source.*container-commands.sh" "$USER_HOME/.bashrc"; then
+  echo "source \$HOME/.container/container-commands.sh" >> "$USER_HOME/.bashrc" || { echo "Failed to update .bashrc"; exit 1; }
 fi
 
 # Create bin scripts with proper error handling
 echo "Creating container-detach script..."
-cat > $HOME/bin/container-detach << 'EOC'
+cat > "$USER_HOME/bin/container-detach" << 'EOC'
 #!/bin/bash
 echo 'Detaching from container (container keeps running)...'
 echo 'Container will continue running in the background.'
 touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
 exit 0
 EOC
-chmod +x $HOME/bin/container-detach || { echo "Failed to make container-detach executable"; exit 1; }
+chmod +x "$USER_HOME/bin/container-detach" || { echo "Failed to make container-detach executable"; exit 1; }
 
 echo "Creating container-stop script..."
-cat > $HOME/bin/container-stop << 'EOC'
+cat > "$USER_HOME/bin/container-stop" << 'EOC'
 #!/bin/bash
 echo 'Stopping container...'
 echo 'Container will be stopped but can be started again.'
 touch $HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
 exit 0
 EOC
-chmod +x $HOME/bin/container-stop || { echo "Failed to make container-stop executable"; exit 1; }
+chmod +x "$USER_HOME/bin/container-stop" || { echo "Failed to make container-stop executable"; exit 1; }
 
 echo "Creating container-remove script..."
-cat > $HOME/bin/container-remove << 'EOC'
+cat > "$USER_HOME/bin/container-remove" << 'EOC'
 #!/bin/bash
 echo 'Removing container...'
 echo 'Container will be stopped and removed permanently.'
 touch $HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
 exit 0
 EOC
-chmod +x $HOME/bin/container-remove || { echo "Failed to make container-remove executable"; exit 1; }
+chmod +x "$USER_HOME/bin/container-remove" || { echo "Failed to make container-remove executable"; exit 1; }
 
 echo "Creating container-help script..."
-cat > $HOME/bin/container-help << 'EOC'
+cat > "$USER_HOME/bin/container-help" << 'EOC'
 #!/bin/bash
 echo 'Container Commands:'
 echo '  - container-detach: Detach from the container (container keeps running)'
@@ -289,25 +387,25 @@ echo '  - container-stop: Stop the container (container will be stopped but not 
 echo '  - container-remove: Stop and remove the container completely'
 echo '  - container-help: Show this help message'
 EOC
-chmod +x $HOME/bin/container-help || { echo "Failed to make container-help executable"; exit 1; }
+chmod +x "$USER_HOME/bin/container-help" || { echo "Failed to make container-help executable"; exit 1; }
 
 # Make sure bin directory is in the PATH
-if ! grep -q 'export PATH="$HOME/bin:$PATH"' $HOME/.bashrc; then
-  echo 'export PATH="$HOME/bin:$PATH"' >> $HOME/.bashrc || { echo "Failed to update PATH in .bashrc"; exit 1; }
+if ! grep -q "export PATH=\"\$HOME/bin:\$PATH\"" "$USER_HOME/.bashrc"; then
+  echo 'export PATH="$HOME/bin:$PATH"' >> "$USER_HOME/.bashrc" || { echo "Failed to update PATH in .bashrc"; exit 1; }
 fi
 
 # Show help when a user logs in (if not already set)
-if ! grep -q 'container-help' $HOME/.bashrc; then
-  echo 'container-help' >> $HOME/.bashrc || { echo "Failed to add container-help to .bashrc"; exit 1; }
+if ! grep -q 'container-help' "$USER_HOME/.bashrc"; then
+  echo 'container-help' >> "$USER_HOME/.bashrc" || { echo "Failed to add container-help to .bashrc"; exit 1; }
 fi
 
 # Try to create system-wide command links if we have permissions
 if [ "$RUNNING_AS_ROOT" = true ] || [ -w /usr/local/bin ]; then
   echo "Creating system-wide command links in /usr/local/bin..."
-  ln -sf $HOME/bin/container-detach /usr/local/bin/container-detach
-  ln -sf $HOME/bin/container-stop /usr/local/bin/container-stop
-  ln -sf $HOME/bin/container-remove /usr/local/bin/container-remove
-  ln -sf $HOME/bin/container-help /usr/local/bin/container-help
+  ln -sf "$USER_HOME/bin/container-detach" /usr/local/bin/container-detach
+  ln -sf "$USER_HOME/bin/container-stop" /usr/local/bin/container-stop
+  ln -sf "$USER_HOME/bin/container-remove" /usr/local/bin/container-remove
+  ln -sf "$USER_HOME/bin/container-help" /usr/local/bin/container-help
   echo "System-wide command links created."
 else
   echo "No permission to create system-wide command links in /usr/local/bin."
@@ -320,14 +418,23 @@ if [ -w /workdir ]; then
   mkdir -p /workdir/.container-commands || true
   
   # Copy the container commands to the fallback location
-  cp $HOME/bin/container-detach /workdir/.container-commands/ || true
-  cp $HOME/bin/container-stop /workdir/.container-commands/ || true
-  cp $HOME/bin/container-remove /workdir/.container-commands/ || true
-  cp $HOME/bin/container-help /workdir/.container-commands/ || true
+  cp "$USER_HOME/bin/container-detach" /workdir/.container-commands/ || true
+  cp "$USER_HOME/bin/container-stop" /workdir/.container-commands/ || true
+  cp "$USER_HOME/bin/container-remove" /workdir/.container-commands/ || true
+  cp "$USER_HOME/bin/container-help" /workdir/.container-commands/ || true
   chmod +x /workdir/.container-commands/* || true
   
   echo "Fallback commands added to /workdir/.container-commands/"
 fi
+
+# Create additional fallback in /tmp for all users
+mkdir -p /tmp/.container_commands || true
+cp "$USER_HOME/bin/container-detach" /tmp/.container_commands/ || true
+cp "$USER_HOME/bin/container-stop" /tmp/.container_commands/ || true
+cp "$USER_HOME/bin/container-remove" /tmp/.container_commands/ || true
+cp "$USER_HOME/bin/container-help" /tmp/.container_commands/ || true
+chmod +x /tmp/.container_commands/* || true
+echo "Universal fallback commands added to /tmp/.container_commands/"
 
 echo "Container commands installed successfully for user $(whoami)."
 EOF
@@ -336,7 +443,10 @@ EOF
 docker cp "$TMP_COMMANDS_DIR/install-commands.sh" "$CONTAINER_NAME:/tmp/install-commands.sh"
 
 # Make sure the script is executable by everyone (can be run by any user)
-docker exec "$CONTAINER_NAME" bash -c "chmod 755 /tmp/install-commands.sh || true"
+docker exec "$CONTAINER_NAME" bash -c "chmod 755 /tmp/install-commands.sh 2>/dev/null || true"
+
+# Try to make /tmp world-writable if possible to overcome permission issues
+docker exec "$CONTAINER_NAME" bash -c "chmod 1777 /tmp 2>/dev/null || true"
 
 # First, attempt to install the commands system-wide for all users
 echo "Attempting to install container commands for all users..."
@@ -457,152 +567,211 @@ install_for_all_users
 if docker exec "$CONTAINER_NAME" bash -c "grep -q crops/poky /etc/motd 2>/dev/null || grep -q poky /etc/motd 2>/dev/null || docker --version | grep -q Docker 2>/dev/null || [ -d /workdir ]"; then
     echo "Detected CROPS/poky container or container with /workdir, using special handling..."
     
-    # For CROPS/poky containers, we'll try a few different locations
-    docker exec "$CONTAINER_NAME" bash -c "
-        # Try workdir first, but if it's not writable, fall back to tmp
-        if [ -w /workdir ]; then
-            CMD_DIR=/workdir/.container_commands
-            mkdir -p \$CMD_DIR
-        else
-            CMD_DIR=/tmp/.container_commands
-            mkdir -p \$CMD_DIR
-        fi
-        
-        echo \"Using command directory: \$CMD_DIR\"
-        
-        # Create global command scripts
-        cat > \$CMD_DIR/container-detach << 'EOC'
+    # Create simplified command scripts that will be copied to the container
+    TMP_POKY_DIR=$(mktemp -d)
+    
+    # Create container-detach script
+    cat > "$TMP_POKY_DIR/container-detach" << 'EOF'
 #!/bin/bash
 echo 'Detaching from container (container keeps running)...'
 echo 'Container will continue running in the background.'
-touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
 exit 0
-EOC
-        
-        cat > \$CMD_DIR/container-stop << 'EOC'
+EOF
+    
+    # Create container-stop script
+    cat > "$TMP_POKY_DIR/container-stop" << 'EOF'
 #!/bin/bash
 echo 'Stopping container...'
 echo 'Container will be stopped but can be started again.'
-touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+touch $HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
 exit 0
-EOC
-        
-        cat > \$CMD_DIR/container-remove << 'EOC'
+EOF
+    
+    # Create container-remove script
+    cat > "$TMP_POKY_DIR/container-remove" << 'EOF'
 #!/bin/bash
 echo 'Removing container...'
 echo 'Container will be stopped and removed permanently.'
-touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+touch $HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
 exit 0
-EOC
-        
-        cat > \$CMD_DIR/container-help << 'EOC'
+EOF
+    
+    # Create container-help script
+    cat > "$TMP_POKY_DIR/container-help" << 'EOF'
 #!/bin/bash
 echo 'Container Commands:'
 echo '  - container-detach: Detach from the container (container keeps running)'
 echo '  - container-stop: Stop the container (container will be stopped but not removed)'
 echo '  - container-remove: Stop and remove the container completely'
 echo '  - container-help: Show this help message'
-EOC
-        
-        # Make scripts executable
-        chmod +x \$CMD_DIR/*
-        
-        # Create system-wide symlinks if possible
-        if [ -w /usr/local/bin ]; then
-            ln -sf \$CMD_DIR/container-detach /usr/local/bin/container-detach
-            ln -sf \$CMD_DIR/container-stop /usr/local/bin/container-stop
-            ln -sf \$CMD_DIR/container-remove /usr/local/bin/container-remove
-            ln -sf \$CMD_DIR/container-help /usr/local/bin/container-help
-            echo 'Created system-wide symlinks in /usr/local/bin'
+EOF
+    
+    # Make all scripts executable
+    chmod +x "$TMP_POKY_DIR"/*
+    
+    # Create init script that will be sourced to add scripts to PATH
+    cat > "$TMP_POKY_DIR/container-init.sh" << 'EOF'
+#!/bin/bash
+# Container commands initialization script
+# This will be added to profile.d or bashrc
+
+# Add container commands to PATH if they exist
+if [ -d "/workdir/.container_commands" ]; then
+    CMD_DIR="/workdir/.container_commands"
+    export PATH="$CMD_DIR:$PATH"
+elif [ -d "/tmp/.container_commands" ]; then
+    CMD_DIR="/tmp/.container_commands"
+    export PATH="$CMD_DIR:$PATH"
+fi
+
+# Show help message if this is an interactive shell and help script exists
+if [ -t 0 ]; then
+    if command -v container-help >/dev/null 2>&1; then
+        container-help
+    fi
+fi
+EOF
+    
+    # Copy all scripts to the container
+    docker cp "$TMP_POKY_DIR/." "$CONTAINER_NAME:/tmp/poky_commands/"
+    
+    # Execute script in container to set up commands
+    docker exec "$CONTAINER_NAME" bash -c '
+        # Try workdir first, but if it is not writable, fall back to tmp
+        if [ -d /workdir ] && [ -w /workdir ]; then
+            CMD_DIR=/workdir/.container_commands
+            mkdir -p "$CMD_DIR"
+        else
+            CMD_DIR=/tmp/.container_commands
+            mkdir -p "$CMD_DIR"
         fi
         
-        # Create a global bash hook
-        if [ -w /etc/profile.d ]; then
-            echo '#!/bin/bash' > /etc/profile.d/container-commands.sh
-            echo "export PATH=\"\$CMD_DIR:\$PATH\"" >> /etc/profile.d/container-commands.sh
-            echo "if [ -x \$CMD_DIR/container-help ] && [ -t 0 ]; then" >> /etc/profile.d/container-commands.sh
-            echo "  \$CMD_DIR/container-help" >> /etc/profile.d/container-commands.sh
-            echo "fi" >> /etc/profile.d/container-commands.sh
-            chmod +x /etc/profile.d/container-commands.sh
-            echo 'Created global profile.d hook'
+        echo "Using command directory: $CMD_DIR"
+        
+        # Copy command scripts from temporary location
+        if [ -d /tmp/poky_commands ]; then
+            cp -f /tmp/poky_commands/container-* "$CMD_DIR/"
+            chmod +x "$CMD_DIR"/* 2>/dev/null || true
+        fi
+        
+        # Create system-wide symlinks if possible
+        if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+            ln -sf "$CMD_DIR/container-detach" /usr/local/bin/container-detach 2>/dev/null || true
+            ln -sf "$CMD_DIR/container-stop" /usr/local/bin/container-stop 2>/dev/null || true
+            ln -sf "$CMD_DIR/container-remove" /usr/local/bin/container-remove 2>/dev/null || true
+            ln -sf "$CMD_DIR/container-help" /usr/local/bin/container-help 2>/dev/null || true
+            echo "Created system-wide symlinks in /usr/local/bin"
+        fi
+        
+        # Try to create a global profile script, but do not fail if we cannot
+        if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+            cat > /etc/profile.d/container-commands.sh << EOC
+#!/bin/bash
+# Container commands setup for CROPS/poky
+if [ -d "$CMD_DIR" ]; then
+    export PATH="$CMD_DIR:\$PATH"
+    if [ -t 0 ] && [ -x $CMD_DIR/container-help ]; then
+        $CMD_DIR/container-help
+    fi
+fi
+EOC
+            chmod +x /etc/profile.d/container-commands.sh 2>/dev/null || true
+            echo "Created global profile.d hook"
+        else
+            echo "Cannot create global profile.d hook (no permission)"
+        fi
+        
+        # Detect root home directory
+        ROOT_HOME=$(getent passwd root | cut -d: -f6)
+        if [ -z "$ROOT_HOME" ]; then
+            ROOT_HOME="/root"  # Default if we could not detect it
         fi
         
         # Add to bashrc for all users
-        for bashrc in /home/*/.bashrc /root/.bashrc; do
-            if [ -w \"\$bashrc\" ]; then
+        for bashrc in /home/*/.bashrc "$ROOT_HOME/.bashrc"; do
+            if [ -f "$bashrc" ] && [ -w "$bashrc" ]; then
                 # Remove any existing entries to avoid duplication
-                sed -i '/container_commands/d' \"\$bashrc\" 2>/dev/null || true
-                sed -i '/container-help/d' \"\$bashrc\" 2>/dev/null || true
+                sed -i "/container_commands/d" "$bashrc" 2>/dev/null || true
+                sed -i "/container-help/d" "$bashrc" 2>/dev/null || true
                 
                 # Add path to container commands
-                echo '' >> \"\$bashrc\"
-                echo '# Container command setup' >> \"\$bashrc\"
-                echo 'if [ -d \"/tmp/.container_commands\" ]; then' >> \"\$bashrc\"
-                echo '  export PATH=\"/tmp/.container_commands:\$PATH\"' >> \"\$bashrc\"
-                echo 'elif [ -d \"/workdir/.container_commands\" ]; then' >> \"\$bashrc\"
-                echo '  export PATH=\"/workdir/.container_commands:\$PATH\"' >> \"\$bashrc\"
-                echo 'fi' >> \"\$bashrc\"
-                echo '' >> \"\$bashrc\"
-                echo 'if command -v container-help >/dev/null 2>&1 && [ -t 0 ]; then' >> \"\$bashrc\"
-                echo '  container-help' >> \"\$bashrc\"
-                echo 'fi' >> \"\$bashrc\"
-                echo \"Updated \$bashrc\"
+                echo "" >> "$bashrc"
+                echo "# Container command setup" >> "$bashrc"
+                echo "if [ -d \"$CMD_DIR\" ]; then" >> "$bashrc"
+                echo "  export PATH=\"$CMD_DIR:\$PATH\"" >> "$bashrc"
+                echo "fi" >> "$bashrc"
+                echo "" >> "$bashrc"
+                echo "if command -v container-help >/dev/null 2>&1 && [ -t 0 ]; then" >> "$bashrc"
+                echo "  container-help" >> "$bashrc"
+                echo "fi" >> "$bashrc"
+                echo "Updated $bashrc"
             fi
         done
         
         # Create a universal profile hook that will be sourced by all shells
-        if [ -w /etc ]; then
-            echo '#!/bin/bash' > /etc/profile.d/container-path.sh
-            echo 'if [ -d \"/tmp/.container_commands\" ]; then' >> /etc/profile.d/container-path.sh
-            echo '  export PATH=\"/tmp/.container_commands:\$PATH\"' >> /etc/profile.d/container-path.sh
-            echo 'elif [ -d \"/workdir/.container_commands\" ]; then' >> /etc/profile.d/container-path.sh
-            echo '  export PATH=\"/workdir/.container_commands:\$PATH\"' >> /etc/profile.d/container-path.sh
-            echo 'fi' >> /etc/profile.d/container-path.sh
-            chmod +x /etc/profile.d/container-path.sh
-            echo 'Created global PATH hook in /etc/profile.d/container-path.sh'
+        if [ -d /etc ] && [ -w /etc ]; then
+            if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+                cat > /etc/profile.d/container-path.sh << EOC
+#!/bin/bash
+# Ensure container commands directory is in PATH
+if [ -d "$CMD_DIR" ]; then
+  export PATH="$CMD_DIR:\$PATH"
+fi
+EOC
+                chmod +x /etc/profile.d/container-path.sh 2>/dev/null || true
+                echo "Created global PATH hook in /etc/profile.d/container-path.sh"
+            else
+                echo "Cannot create global PATH hook (no permission)"
+            fi
+        else
+            echo "Cannot access /etc with write permissions"
         fi
         
         # Create convenience symlinks in common locations
         mkdir -p /tmp/bin
-        ln -sf \$CMD_DIR/container-detach /tmp/bin/container-detach
-        ln -sf \$CMD_DIR/container-stop /tmp/bin/container-stop
-        ln -sf \$CMD_DIR/container-remove /tmp/bin/container-remove
-        ln -sf \$CMD_DIR/container-help /tmp/bin/container-help
+        ln -sf "$CMD_DIR/container-detach" /tmp/bin/container-detach 2>/dev/null || true
+        ln -sf "$CMD_DIR/container-stop" /tmp/bin/container-stop 2>/dev/null || true
+        ln -sf "$CMD_DIR/container-remove" /tmp/bin/container-remove 2>/dev/null || true
+        ln -sf "$CMD_DIR/container-help" /tmp/bin/container-help 2>/dev/null || true
         chmod +x /tmp/bin/* 2>/dev/null || true
-        echo 'Created symlinks in /tmp/bin'
+        echo "Created symlinks in /tmp/bin"
         
         # Add legacy aliases for backward compatibility
-        echo '#!/bin/bash' > \$CMD_DIR/detach
-        echo 'exec \$CMD_DIR/container-detach' >> \$CMD_DIR/detach
-        chmod +x \$CMD_DIR/detach
+        cat > "$CMD_DIR/detach" << EOC
+#!/bin/bash
+exec container-detach
+EOC
+        chmod +x "$CMD_DIR/detach" 2>/dev/null || true
         
-        echo '#!/bin/bash' > \$CMD_DIR/stop
-        echo 'exec \$CMD_DIR/container-stop' >> \$CMD_DIR/stop
-        chmod +x \$CMD_DIR/stop
+        cat > "$CMD_DIR/stop" << EOC
+#!/bin/bash
+exec container-stop
+EOC
+        chmod +x "$CMD_DIR/stop" 2>/dev/null || true
         
-        echo '#!/bin/bash' > \$CMD_DIR/remove
-        echo 'exec \$CMD_DIR/container-remove' >> \$CMD_DIR/remove
-        chmod +x \$CMD_DIR/remove
+        cat > "$CMD_DIR/remove" << EOC
+#!/bin/bash
+exec container-remove
+EOC
+        chmod +x "$CMD_DIR/remove" 2>/dev/null || true
         
-        echo '#!/bin/bash' > \$CMD_DIR/help
-        echo 'exec \$CMD_DIR/container-help' >> \$CMD_DIR/help
-        chmod +x \$CMD_DIR/help
+        cat > "$CMD_DIR/help" << EOC
+#!/bin/bash
+exec container-help
+EOC
+        chmod +x "$CMD_DIR/help" 2>/dev/null || true
         
-        # Create a simple script that allows directly sourcing the PATH
-        echo '#!/bin/bash' > \$CMD_DIR/setup-commands.sh
-        echo 'export PATH=\"\$CMD_DIR:\$PATH\"' >> \$CMD_DIR/setup-commands.sh
-        chmod +x \$CMD_DIR/setup-commands.sh
-        
-        echo 'CROPS/poky container commands installed successfully'
-    "
+        echo "CROPS/poky container commands installed successfully"
+    '
+    
+    # Clean up our temporary directory
+    rm -rf "$TMP_POKY_DIR"
     
     echo "Container commands added to CROPS/poky container $CONTAINER_NAME."
     echo "Commands will be available in all new shell sessions."
     
-    # Run one final system-wide install to ensure maximum compatibility
-    install_for_all_users
-    
-    # Exit early as we've handled this special case
+    # Exit early as we have handled this special case
     exit 0
 fi
 
