@@ -701,6 +701,7 @@ EOF
             ln -sf "$CMD_DIR/container-help" /usr/local/bin/container-help 2>/dev/null || true
             echo "Created system-wide symlinks in /usr/local/bin"
         fi
+'
 
 # Clean up temporary files
 rm -rf "$TMP_COMMANDS_DIR"

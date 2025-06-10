@@ -383,7 +383,7 @@ echo "source $(pwd)/container-commands-completion.sh" >> ~/.bashrc
 
 The bash completion supports:
 
-- Container management scripts (`add-commands-to-container.sh`, `add-commands-to-poky-container.sh`, etc.)
+- Container management scripts (`add-commands-to-container.sh`, `add-commands-to-yocto-container.sh`, etc.)
 - Docker exec wrappers (`docker-exec-it`, `docker-exec-detached`)
 - Container connection scripts (`ros2-connect`, `yocto-connect`)
 - Container maintenance scripts (`restart-ros2-container.sh`, `fix-container-volumes.sh`, etc.)
@@ -424,12 +424,12 @@ The standard container commands (`container-detach`, `container-stop`, etc.) are
 For CROPS/Poky containers, we provide a dedicated script that handles their specific requirements:
 
 ```bash
-./add-commands-to-poky-container.sh CONTAINER_NAME
+./add-commands-to-yocto-container.sh CONTAINER_NAME
 ```
 
 For example:
 ```bash
-./add-commands-to-poky-container.sh yocto_container
+./add-commands-to-yocto-container.sh yocto_container
 ```
 
 This script:
@@ -441,10 +441,10 @@ This script:
 
 ### Example Script Usage
 
-For a quick example of using these commands with Poky containers, we provide an example script:
+For a quick example of using these commands with Yocto containers, we provide an example script:
 
 ```bash
-./example-add-commands-to-poky.sh
+./example-add-commands-to-yocto.sh
 ```
 
 This script demonstrates:
@@ -454,7 +454,7 @@ This script demonstrates:
 
 ### Implementation Details
 
-The `add-commands-to-poky-container.sh` script:
+The `add-commands-to-yocto-container.sh` script:
 
 1. Creates temporary command scripts
 2. Copies them to the container
@@ -515,5 +515,5 @@ If commands are not available after installation:
 
 4. For permission issues, try running the installation script with:
    ```bash
-   sudo ./add-commands-to-poky-container.sh CONTAINER_NAME
+   sudo ./add-commands-to-yocto-container.sh CONTAINER_NAME
    ```

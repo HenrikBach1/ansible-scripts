@@ -68,7 +68,8 @@ _container_commands_completion() {
 # Main container command installation scripts
 complete -F _add_commands_to_container_completion add-commands-to-container.sh
 complete -F _add_commands_to_container_completion add-commands-to-poky-container.sh
-complete -F _container_names_completion example-add-commands-to-poky.sh
+complete -F _add_commands_to_container_completion add-commands-to-yocto-container.sh
+complete -F _container_names_completion example-add-commands-to-yocto.sh
 
 # Docker exec wrappers
 complete -F _docker_exec_completion docker-exec-it
