@@ -18,24 +18,24 @@ These are the primary commands available in all containers:
 When you run any of these commands, the container creates a marker file that is detected by the container watcher script:
 
 1. For `container-detach`:
-   - ROS2: Creates `/home/ubuntu/.container_detach_requested`
-   - Yocto: Creates `/workdir/.container_detach_requested`
+   - Creates a marker file in one of these locations (in order of preference):
+     - `$HOME/.container_detach_requested`
+     - `/workdir/.container_detach_requested`
+     - `/tmp/.container_detach_requested`
 
 2. For `container-stop`:
-   - ROS2: Creates `/home/ubuntu/.container_stop_requested`
-   - Yocto: Creates `/workdir/.container_stop_requested`
+   - Creates a marker file in one of these locations (in order of preference):
+     - `$HOME/.container_stop_requested`
+     - `/workdir/.container_stop_requested`
+     - `/tmp/.container_stop_requested`
 
 3. For `container-remove`:
-   - ROS2: Creates `/home/ubuntu/.container_remove_requested`
-   - Yocto: Creates `/workdir/.container_remove_requested`
+   - Creates a marker file in one of these locations (in order of preference):
+     - `$HOME/.container_remove_requested`
+     - `/workdir/.container_remove_requested`
+     - `/tmp/.container_remove_requested`
 
 The container watcher script (`container-watch.sh`) monitors for these marker files and takes the appropriate action.
-
-## Examples
-
-```bash
-# Detach from the container while keeping it running
-detach
 
 ## Examples
 

@@ -17,35 +17,16 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     sleep 1
 fi
 
-# Clean up any potential leftover files in mounted directories
-docker exec -it "$CONTAINER_NAME" bash -c '
-# Clean up any existing keep-alive and bash files in workspace
-if [ -d "/projects/keepalive" ]; then
-  rm -rf /projects/keepalive
-fi
-
-if [ -f "/projects/yocto-container-bashrc.sh" ]; then
-  rm -f /projects/yocto-container-bashrc.sh
-fi
-
-if [ -d "/workspace/keepalive" ]; then
-  rm -rf /workspace/keepalive
-fi
-
-if [ -f "/workspace/yocto-container-bashrc.sh" ]; then
-  rm -f /workspace/yocto-container-bashrc.sh
-fi
-'
-
 # Add container commands before connecting
 if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
     echo "Ensuring container commands are available..."
-    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+    # For CROPS/poky containers, use root as the user
+    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "root"
 fi
 
 # Connect to the container
 echo "Connecting to $CONTAINER_NAME..."
-docker exec -it "$CONTAINER_NAME" bash -c 'cat /etc/motd && bash --login'
+docker exec -it "$CONTAINER_NAME" bash
 
 # Define functions - these are only used locally if the container doesn't have its own
 function container-detach() {

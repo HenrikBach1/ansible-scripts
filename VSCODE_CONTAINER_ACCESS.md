@@ -59,16 +59,20 @@ These commands work in all terminal sessions, including VS Code's integrated ter
 
 > **Note about Container Commands in VS Code**:
 > 
-> When connecting via VS Code's "Attach to Container" feature directly, you might need to
-> run our command setup script once to ensure all container commands are available:
+> Our container scripts now automatically add container commands to both ROS2 and Yocto containers.
+> If you're connecting to a container that was created with our scripts, all commands should be
+> available immediately.
+>
+> However, if you're connecting to a container created through other means or if commands are not available,
+> you can run our command setup script to ensure all container commands are available:
 >
 > ```bash
 > # From the host, add container commands to an existing container
-> ./add-commands-to-container.sh yocto_container  # or your container name
+> ./add-commands-to-container.sh container_name root  # Use the correct container name
 > ```
 >
 > After running this script, the container commands (`container-help`, `container-detach`, `container-stop`, 
-> `container-remove`, etc.) will be available in any VS Code terminal session.
+> `container-remove`) will be available in any VS Code terminal session.
 
 ## Command-Line Connection Methods
 

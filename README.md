@@ -46,7 +46,7 @@ These features are implemented through a shared script (`run-container-common.sh
 
 ## Helper Scripts
 
-- `add-commands-to-container.sh`: Adds container commands to an existing container that was connected to directly via VS Code's "Attach to Container" or other methods
+- `add-commands-to-container.sh`: Adds standardized container commands to any Docker container. This script is called automatically by container creation scripts, but can also be used manually to add commands to existing containers.
 - `container-watch.sh`: Background process that monitors containers and handles detach/stop/remove requests
 
 ## Container Connection Methods
@@ -75,7 +75,7 @@ There are two ways to connect to containers:
 > - Start a container with `./start-ros2-container.sh` (without `--attach`), then connect to it later with `./ros2-connect`
 > - OR directly use `./ros2-connect` if the container already exists (it will start the container if needed)
 >
-> Always use these connection methods instead of direct Docker commands (like `docker exec`) to ensure all container commands (`help`, `stop`, `remove`, etc.) are available in your session.
+> Always use these connection methods instead of direct Docker commands (like `docker exec`) to ensure all container commands (`container-help`, `container-stop`, `container-remove`, etc.) are available in your session.
 
 For detailed information on connecting to containers using VS Code, see [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md).
 
@@ -369,3 +369,4 @@ If you encounter issues with containers stopping unexpectedly when using VS Code
 
 * [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md) - Instructions for accessing containers from Visual Studio Code
 * [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md) - Comprehensive guide to container commands, detached operation, and troubleshooting
+* [CONTAINER_INSTALLATION.md](CONTAINER_INSTALLATION.md) - Detailed documentation of the container command installation system

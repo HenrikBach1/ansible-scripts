@@ -13,7 +13,7 @@ source "$SCRIPT_DIR/run-container-common.sh"
 # Default values
 ENV_TYPE="yocto"
 CONTAINER_NAME="yocto_container"
-WORKSPACE_DIR="$HOME/yocto_ws"
+WORKSPACE_DIR="$HOME/projects/yocto"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
 PERSISTENT=true
@@ -548,7 +548,21 @@ fi
 # Add container commands to the container
 if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
     echo "Adding container commands to $CONTAINER_NAME..."
-    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+    # For CROPS/poky containers, we use root to ensure proper installation
+    # Since the script now has special handling for CROPS/poky containers
+    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "root"
+    
+    # If that didn't work, try with the usersetup account which is often present in CROPS/poky
+    if [ $? -ne 0 ]; then
+        echo "Trying alternate user for command installation..."
+        bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "usersetup"
+    fi
+    
+    # If that still didn't work, try with pokyuser as a last resort
+    if [ $? -ne 0 ]; then
+        echo "Trying pokyuser for command installation..."
+        bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "pokyuser"
+    fi
 fi
 
 # If auto-attach is enabled, connect to the container
