@@ -112,6 +112,31 @@ echo '  - container-remove: Stop and remove the container completely'
 echo '  - container-help: Show this help message'
 EOC
 
+        # Create bash completion script for container commands
+        cat > \$COMMANDS_DIR/container-completion.sh << 'EOC'
+#!/bin/bash
+# Bash completion for container commands
+
+# Complete for container commands
+_container_commands_completion() {
+    local curr_arg;
+    curr_arg="\${COMP_WORDS[COMP_CWORD]}"
+    
+    # Complete with available container commands
+    COMPREPLY=( \$(compgen -W "container-detach container-stop container-remove container-help detach stop remove help" -- \$curr_arg) )
+}
+
+# Register completions
+complete -F _container_commands_completion container-detach
+complete -F _container_commands_completion container-stop
+complete -F _container_commands_completion container-remove
+complete -F _container_commands_completion container-help
+complete -F _container_commands_completion detach
+complete -F _container_commands_completion stop
+complete -F _container_commands_completion remove
+complete -F _container_commands_completion help
+EOC
+
         # Make all command scripts executable
         chmod 755 \$COMMANDS_DIR/container-* || true
         
@@ -179,8 +204,13 @@ EOC
 if [ -f /tmp/container-commands/container-init.sh ]; then
     source /tmp/container-commands/container-init.sh
 fi' >> /etc/bash.bashrc
-                echo 'Added to global bash.bashrc.'
+                echo 'if [ -d /tmp/bin ]; then export PATH="/tmp/bin:$PATH"; fi' >> /etc/bash.bashrc
+                echo 'if [ -t 0 ] && command -v container-help > /dev/null 2>&1; then container-help; fi' >> /etc/bash.bashrc
+                echo 'if [ -f /tmp/bin/container-completion.sh ]; then source /tmp/bin/container-completion.sh; fi' >> /etc/bash.bashrc
+                echo "Updated /etc/bash.bashrc"
             fi
+        else
+            echo 'Cannot create symlinks in /usr/local/bin (no permission).'
         fi
         
         # Add to all user bashrc files we can find and have permission to modify
@@ -651,8 +681,16 @@ EOF
         
         # Copy command scripts from temporary location
         if [ -d /tmp/poky_commands ]; then
-            cp -f /tmp/poky_commands/container-* "$CMD_DIR/"
+            cp -f /tmp/poky_commands/container-* "$CMD_DIR/" 2>/dev/null || true
             chmod +x "$CMD_DIR"/* 2>/dev/null || true
+            
+            # Fallback direct copying if wildcard fails
+            for cmd in container-detach container-stop container-remove container-help container-init.sh; do
+                if [ -f "/tmp/poky_commands/$cmd" ]; then
+                    cp -f "/tmp/poky_commands/$cmd" "$CMD_DIR/" 2>/dev/null || true
+                    chmod +x "$CMD_DIR/$cmd" 2>/dev/null || true
+                fi
+            done
         fi
         
         # Create system-wide symlinks if possible
@@ -663,117 +701,6 @@ EOF
             ln -sf "$CMD_DIR/container-help" /usr/local/bin/container-help 2>/dev/null || true
             echo "Created system-wide symlinks in /usr/local/bin"
         fi
-        
-        # Try to create a global profile script, but do not fail if we cannot
-        if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
-            cat > /etc/profile.d/container-commands.sh << EOC
-#!/bin/bash
-# Container commands setup for CROPS/poky
-if [ -d "$CMD_DIR" ]; then
-    export PATH="$CMD_DIR:\$PATH"
-    if [ -t 0 ] && [ -x $CMD_DIR/container-help ]; then
-        $CMD_DIR/container-help
-    fi
-fi
-EOC
-            chmod +x /etc/profile.d/container-commands.sh 2>/dev/null || true
-            echo "Created global profile.d hook"
-        else
-            echo "Cannot create global profile.d hook (no permission)"
-        fi
-        
-        # Detect root home directory
-        ROOT_HOME=$(getent passwd root | cut -d: -f6)
-        if [ -z "$ROOT_HOME" ]; then
-            ROOT_HOME="/root"  # Default if we could not detect it
-        fi
-        
-        # Add to bashrc for all users
-        for bashrc in /home/*/.bashrc "$ROOT_HOME/.bashrc"; do
-            if [ -f "$bashrc" ] && [ -w "$bashrc" ]; then
-                # Remove any existing entries to avoid duplication
-                sed -i "/container_commands/d" "$bashrc" 2>/dev/null || true
-                sed -i "/container-help/d" "$bashrc" 2>/dev/null || true
-                
-                # Add path to container commands
-                echo "" >> "$bashrc"
-                echo "# Container command setup" >> "$bashrc"
-                echo "if [ -d \"$CMD_DIR\" ]; then" >> "$bashrc"
-                echo "  export PATH=\"$CMD_DIR:\$PATH\"" >> "$bashrc"
-                echo "fi" >> "$bashrc"
-                echo "" >> "$bashrc"
-                echo "if command -v container-help >/dev/null 2>&1 && [ -t 0 ]; then" >> "$bashrc"
-                echo "  container-help" >> "$bashrc"
-                echo "fi" >> "$bashrc"
-                echo "Updated $bashrc"
-            fi
-        done
-        
-        # Create a universal profile hook that will be sourced by all shells
-        if [ -d /etc ] && [ -w /etc ]; then
-            if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
-                cat > /etc/profile.d/container-path.sh << EOC
-#!/bin/bash
-# Ensure container commands directory is in PATH
-if [ -d "$CMD_DIR" ]; then
-  export PATH="$CMD_DIR:\$PATH"
-fi
-EOC
-                chmod +x /etc/profile.d/container-path.sh 2>/dev/null || true
-                echo "Created global PATH hook in /etc/profile.d/container-path.sh"
-            else
-                echo "Cannot create global PATH hook (no permission)"
-            fi
-        else
-            echo "Cannot access /etc with write permissions"
-        fi
-        
-        # Create convenience symlinks in common locations
-        mkdir -p /tmp/bin
-        ln -sf "$CMD_DIR/container-detach" /tmp/bin/container-detach 2>/dev/null || true
-        ln -sf "$CMD_DIR/container-stop" /tmp/bin/container-stop 2>/dev/null || true
-        ln -sf "$CMD_DIR/container-remove" /tmp/bin/container-remove 2>/dev/null || true
-        ln -sf "$CMD_DIR/container-help" /tmp/bin/container-help 2>/dev/null || true
-        chmod +x /tmp/bin/* 2>/dev/null || true
-        echo "Created symlinks in /tmp/bin"
-        
-        # Add legacy aliases for backward compatibility
-        cat > "$CMD_DIR/detach" << EOC
-#!/bin/bash
-exec container-detach
-EOC
-        chmod +x "$CMD_DIR/detach" 2>/dev/null || true
-        
-        cat > "$CMD_DIR/stop" << EOC
-#!/bin/bash
-exec container-stop
-EOC
-        chmod +x "$CMD_DIR/stop" 2>/dev/null || true
-        
-        cat > "$CMD_DIR/remove" << EOC
-#!/bin/bash
-exec container-remove
-EOC
-        chmod +x "$CMD_DIR/remove" 2>/dev/null || true
-        
-        cat > "$CMD_DIR/help" << EOC
-#!/bin/bash
-exec container-help
-EOC
-        chmod +x "$CMD_DIR/help" 2>/dev/null || true
-        
-        echo "CROPS/poky container commands installed successfully"
-    '
-    
-    # Clean up our temporary directory
-    rm -rf "$TMP_POKY_DIR"
-    
-    echo "Container commands added to CROPS/poky container $CONTAINER_NAME."
-    echo "Commands will be available in all new shell sessions."
-    
-    # Exit early as we have handled this special case
-    exit 0
-fi
 
 # Clean up temporary files
 rm -rf "$TMP_COMMANDS_DIR"

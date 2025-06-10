@@ -90,6 +90,22 @@ For detailed information on connecting to containers using VS Code, see [VSCODE_
 
 By default, all containers are set up to be discoverable by VS Code's Remote - Containers extension.
 
+## Command Completions
+
+To enhance productivity when working with containers, we've provided bash completion for container commands:
+
+```bash
+# Enable command completion
+source ./container-commands-completion.sh
+```
+
+This adds tab-completion for:
+- Container names in all container management scripts
+- Command options like `--name`, `--help`
+- Container operations like `help`, `detach`, `stop`
+
+For more details, see the [Bash Completion section in CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
+
 ## ROS2 Development Environment
 
 The `start-ros2-container.sh` script allows you to create and manage a ROS2 Docker container with X11 forwarding, GPU support, and other useful features.
@@ -152,19 +168,13 @@ The `start-yocto-container.sh` script allows you to create and manage a Yocto Pr
 
 - **Build Environment**: Container provides all necessary tools to build Yocto Project
 - **CROPS/poky Base**: Uses the CROPS/poky container which provides a consistent build environment
-- **Ubuntu 22.04 Base**: Based on Ubuntu 22.04 for long-term stability
+- **Workspace Mounting**: Your projects directory is mounted automatically
+- **Cache Sharing**: Optional caching of downloads and sstate for faster builds
+- **Layer Management**: Tools for working with Yocto layers
 
-### About CROPS/poky Container
+For Yocto/CROPS-specific container commands, see the [Special Considerations for CROPS/Poky Containers](CONTAINER_COMMANDS.md#special-considerations-for-cropspoky-containers) section in the container commands documentation.
 
-The CROPS (Cross Platform Open Source) poky container is a **build environment** that contains the necessary tools to build Yocto Project, but does **not** include the actual Poky source code. When you run the container, you will need to:
-
-1. Clone the Poky repository for your desired Yocto release (e.g., Scarthgap or Kirkstone)
-2. Initialize the build environment
-3. Build your Yocto images
-
-The container tags are based on the host Linux distribution (e.g., `ubuntu-22.04`, `fedora-40`).
-
-### Yocto Basic Usage:
+### Basic Usage:
 
 ```bash
 # Basic usage (runs bash shell in the container)
@@ -368,5 +378,5 @@ If you encounter issues with containers stopping unexpectedly when using VS Code
 ## Additional Documentation
 
 * [VSCODE_CONTAINER_ACCESS.md](VSCODE_CONTAINER_ACCESS.md) - Instructions for accessing containers from Visual Studio Code
-* [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md) - Comprehensive guide to container commands, detached operation, and troubleshooting
+* [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md) - Comprehensive guide to container commands, detached operation, troubleshooting, and CROPS/Poky containers
 * [CONTAINER_INSTALLATION.md](CONTAINER_INSTALLATION.md) - Detailed documentation of the container command installation system

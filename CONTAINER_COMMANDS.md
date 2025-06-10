@@ -360,3 +360,160 @@ This script:
 4. Ensures ROS2 is properly sourced
 
 This is the most reliable way to create a container that will stay running and be accessible from VS Code, especially useful if you're experiencing persistent issues with the other scripts.
+
+# Bash Completion for Container Commands
+
+To enhance usability, we provide a bash completion script for container commands. This allows you to use the `Tab` key to auto-complete container names and commands.
+
+## Installation
+
+Source the completion script in your `.bashrc` or run it before using container commands:
+
+```bash
+source ./container-commands-completion.sh
+```
+
+To make the completion permanent, add it to your `.bashrc`:
+
+```bash
+echo "source $(pwd)/container-commands-completion.sh" >> ~/.bashrc
+```
+
+## Supported Commands
+
+The bash completion supports:
+
+- Container management scripts (`add-commands-to-container.sh`, `add-commands-to-poky-container.sh`, etc.)
+- Docker exec wrappers (`docker-exec-it`, `docker-exec-detached`)
+- Container connection scripts (`ros2-connect`, `yocto-connect`)
+- Container maintenance scripts (`restart-ros2-container.sh`, `fix-container-volumes.sh`, etc.)
+- In-container commands (`container-detach`, `container-stop`, etc.)
+
+## Usage Examples
+
+1. Auto-completing container names:
+   ```
+   ./add-commands-to-container.sh [TAB][TAB]
+   ```
+   This will show a list of all running containers.
+
+2. Auto-completing docker-exec commands:
+   ```
+   ./docker-exec-it ros2_container [TAB][TAB]
+   ```
+   This will show available commands: `help`, `detach`, `stop`, `bash`, `remove`.
+
+3. Auto-completing options:
+   ```
+   ./restart-ros2-container.sh --[TAB][TAB]
+   ```
+   This will show available options: `--name`, `--help`.
+
+The completion script automatically detects running containers, making it easier to manage multiple containers.
+
+# Special Considerations for CROPS/Poky Containers
+
+CROPS/Poky containers (used for Yocto development) have some unique characteristics that require special handling of container commands.
+
+## CROPS/Poky Container Command Installation
+
+The standard container commands (`container-detach`, `container-stop`, etc.) are installed in CROPS/Poky containers using a specialized installation process that accommodates their environment constraints.
+
+### Using the Dedicated Poky Script
+
+For CROPS/Poky containers, we provide a dedicated script that handles their specific requirements:
+
+```bash
+./add-commands-to-poky-container.sh CONTAINER_NAME
+```
+
+For example:
+```bash
+./add-commands-to-poky-container.sh yocto_container
+```
+
+This script:
+- Handles the unique environment of CROPS/Poky containers
+- Works with restricted permissions common in these containers
+- Uses appropriate installation locations (/workdir or /tmp)
+- Creates necessary symlinks and aliases
+- Configures PATH to include command locations
+
+### Example Script Usage
+
+For a quick example of using these commands with Poky containers, we provide an example script:
+
+```bash
+./example-add-commands-to-poky.sh
+```
+
+This script demonstrates:
+1. Checking if a Yocto container is running and starting it if needed
+2. Adding container commands to the container
+3. Connecting to the container with proper setup
+
+### Implementation Details
+
+The `add-commands-to-poky-container.sh` script:
+
+1. Creates temporary command scripts
+2. Copies them to the container
+3. Sets up the commands in appropriate directories based on what's writable
+4. Creates necessary symlinks and aliases
+5. Configures bashrc files to include the commands in PATH
+6. Adds bash completion for easy command usage
+
+### How It Works
+
+1. **Phase 1**: Creates directories and copies scripts
+   - Determines the best command directory based on what's writable
+   - Creates the directory if needed
+   - Copies all command scripts to this location
+
+2. **Phase 2**: Creates symlinks and aliases
+   - Sets up `/tmp/bin` symlinks for broader access
+   - Creates legacy aliases (e.g., `detach` -> `container-detach`)
+
+3. **Phase 3**: Configures system for persistence
+   - Adds to `/etc/profile.d` if possible
+   - Updates all user bashrc files
+   - Ensures commands are available in all new shell sessions
+
+4. **Bash Completion**: 
+   - Adds tab-completion for all container commands
+   - Makes it easier to discover and use available commands
+
+### Installation Locations
+
+Commands are installed in the following locations (in order of preference):
+
+1. `/workdir/.container_commands/` (if /workdir exists and is writable)
+2. `/tmp/.container_commands/` (fallback location)
+
+Symlinks are also created in:
+- `/usr/local/bin/` (if writable)
+- `/tmp/bin/` (fallback location)
+
+## Troubleshooting CROPS/Poky Container Commands
+
+If commands are not available after installation:
+
+1. Check if the commands exist in the container:
+   ```bash
+   docker exec CONTAINER_NAME ls -la /tmp/.container_commands/
+   ```
+
+2. Ensure the scripts are executable:
+   ```bash
+   docker exec CONTAINER_NAME chmod +x /tmp/.container_commands/*
+   ```
+
+3. Manually add the commands to your PATH:
+   ```bash
+   docker exec -it CONTAINER_NAME bash -c 'export PATH=/tmp/.container_commands:$PATH; bash'
+   ```
+
+4. For permission issues, try running the installation script with:
+   ```bash
+   sudo ./add-commands-to-poky-container.sh CONTAINER_NAME
+   ```
