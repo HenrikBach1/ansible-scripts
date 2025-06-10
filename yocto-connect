@@ -26,7 +26,88 @@ fi
 
 # Connect to the container
 echo "Connecting to $CONTAINER_NAME..."
-docker exec -it "$CONTAINER_NAME" bash
+# Create a temporary script that sets up the environment and then launches bash
+TMP_SCRIPT=$(mktemp)
+cat > "$TMP_SCRIPT" << 'EOF'
+#!/bin/bash
+# First, check if container commands are in the usual places
+if [ -d "/tmp/.container_commands" ]; then
+  export PATH="/tmp/.container_commands:$PATH"
+elif [ -d "/workdir/.container_commands" ]; then
+  export PATH="/workdir/.container_commands:$PATH"
+elif [ -d "/usr/local/bin" ]; then
+  # Commands might be in /usr/local/bin directly
+  true
+fi
+
+# Create shell functions as a fallback
+container-detach() {
+  echo 'Detaching from container (container keeps running)...'
+  echo 'Container will continue running in the background.'
+  touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+  exit 0
+}
+
+container-stop() {
+  echo 'Stopping container...'
+  echo 'Container will be stopped but can be started again.'
+  touch $HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+  exit 0
+}
+
+container-remove() {
+  echo 'Removing container...'
+  echo 'Container will be stopped and removed permanently.'
+  touch $HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+  exit 0
+}
+
+container-help() {
+  echo 'Container Commands:'
+  echo '  - container-detach: Detach from the container (container keeps running)'
+  echo '  - container-stop: Stop the container (container will be stopped but not removed)'
+  echo '  - container-remove: Stop and remove the container completely'
+  echo '  - container-help: Show this help message'
+}
+
+# For legacy compatibility
+detach() { container-detach; }
+stop() { container-stop; }
+remove() { container-remove; }
+help() { container-help; }
+
+# Export all functions
+export -f container-detach container-stop container-remove container-help
+export -f detach stop remove help
+
+# Show a welcome message
+echo "Welcome to the Yocto Container!"
+echo "Container commands available:"
+echo "  - container-help: Show all available commands"
+echo "  - container-detach: Detach from container (keeps running)"
+echo "  - container-stop: Stop the container"
+echo "  - container-remove: Stop and remove the container"
+echo ""
+
+# Run the container-help command if it's available
+if command -v container-help >/dev/null 2>&1; then
+  container-help
+else
+  echo "Warning: container commands not in PATH. You can run them directly:"
+  echo "  - /tmp/.container_commands/container-help"
+  echo "  - /tmp/.container_commands/container-detach"
+  echo "  - /tmp/.container_commands/container-stop"
+  echo "  - /tmp/.container_commands/container-remove"
+fi
+
+# Start an interactive shell
+exec bash
+EOF
+
+chmod +x "$TMP_SCRIPT"
+docker cp "$TMP_SCRIPT" "$CONTAINER_NAME:/tmp/container-init.sh"
+docker exec -it "$CONTAINER_NAME" bash /tmp/container-init.sh
+rm -f "$TMP_SCRIPT"
 
 # Define functions - these are only used locally if the container doesn't have its own
 function container-detach() {

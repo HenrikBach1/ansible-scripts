@@ -549,20 +549,26 @@ fi
 if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
     echo "Adding container commands to $CONTAINER_NAME..."
     # For CROPS/poky containers, we use root to ensure proper installation
-    # Since the script now has special handling for CROPS/poky containers
     bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "root"
     
-    # If that didn't work, try with the usersetup account which is often present in CROPS/poky
-    if [ $? -ne 0 ]; then
-        echo "Trying alternate user for command installation..."
-        bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "usersetup"
-    fi
+    # Create a shell init script for the container
+    TMP_INIT_SCRIPT=$(mktemp)
+    cat > "$TMP_INIT_SCRIPT" << 'EOF'
+#!/bin/bash
+# Init script for the Yocto container shells
+
+# Add container commands to PATH
+if [ -d "/tmp/.container_commands" ]; then
+  export PATH="/tmp/.container_commands:$PATH"
+elif [ -d "/workdir/.container_commands" ]; then
+  export PATH="/workdir/.container_commands:$PATH"
+fi
+EOF
     
-    # If that still didn't work, try with pokyuser as a last resort
-    if [ $? -ne 0 ]; then
-        echo "Trying pokyuser for command installation..."
-        bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "pokyuser"
-    fi
+    # Copy the init script to the container
+    docker cp "$TMP_INIT_SCRIPT" "$CONTAINER_NAME:/etc/profile.d/container-init.sh"
+    docker exec "$CONTAINER_NAME" bash -c "chmod +x /etc/profile.d/container-init.sh || true"
+    rm -f "$TMP_INIT_SCRIPT"
 fi
 
 # If auto-attach is enabled, connect to the container

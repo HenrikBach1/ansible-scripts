@@ -427,13 +427,37 @@ EOC
         # Add to bashrc for all users
         for bashrc in /home/*/.bashrc /root/.bashrc; do
             if [ -w \"\$bashrc\" ]; then
-                echo 'export PATH=\"\$CMD_DIR:\$PATH\"' >> \"\$bashrc\"
-                echo 'if [ -x \$CMD_DIR/container-help ]; then' >> \"\$bashrc\"
-                echo '  \$CMD_DIR/container-help' >> \"\$bashrc\"
+                # Remove any existing entries to avoid duplication
+                sed -i '/container_commands/d' \"\$bashrc\" 2>/dev/null || true
+                sed -i '/container-help/d' \"\$bashrc\" 2>/dev/null || true
+                
+                # Add path to container commands
+                echo '' >> \"\$bashrc\"
+                echo '# Container command setup' >> \"\$bashrc\"
+                echo 'if [ -d \"/tmp/.container_commands\" ]; then' >> \"\$bashrc\"
+                echo '  export PATH=\"/tmp/.container_commands:\$PATH\"' >> \"\$bashrc\"
+                echo 'elif [ -d \"/workdir/.container_commands\" ]; then' >> \"\$bashrc\"
+                echo '  export PATH=\"/workdir/.container_commands:\$PATH\"' >> \"\$bashrc\"
+                echo 'fi' >> \"\$bashrc\"
+                echo '' >> \"\$bashrc\"
+                echo 'if command -v container-help >/dev/null 2>&1; then' >> \"\$bashrc\"
+                echo '  container-help' >> \"\$bashrc\"
                 echo 'fi' >> \"\$bashrc\"
                 echo \"Updated \$bashrc\"
             fi
         done
+        
+        # Create a universal profile hook that will be sourced by all shells
+        if [ -w /etc ]; then
+            echo '#!/bin/bash' > /etc/profile.d/container-path.sh
+            echo 'if [ -d \"/tmp/.container_commands\" ]; then' >> /etc/profile.d/container-path.sh
+            echo '  export PATH=\"/tmp/.container_commands:\$PATH\"' >> /etc/profile.d/container-path.sh
+            echo 'elif [ -d \"/workdir/.container_commands\" ]; then' >> /etc/profile.d/container-path.sh
+            echo '  export PATH=\"/workdir/.container_commands:\$PATH\"' >> /etc/profile.d/container-path.sh
+            echo 'fi' >> /etc/profile.d/container-path.sh
+            chmod +x /etc/profile.d/container-path.sh
+            echo 'Created global PATH hook in /etc/profile.d/container-path.sh'
+        fi
         
         # Create convenience symlinks in common locations
         mkdir -p /tmp/bin
@@ -460,6 +484,11 @@ EOC
         echo '#!/bin/bash' > \$CMD_DIR/help
         echo 'exec \$CMD_DIR/container-help' >> \$CMD_DIR/help
         chmod +x \$CMD_DIR/help
+        
+        # Create a simple script that allows directly sourcing the PATH
+        echo '#!/bin/bash' > \$CMD_DIR/setup-commands.sh
+        echo 'export PATH=\"\$CMD_DIR:\$PATH\"' >> \$CMD_DIR/setup-commands.sh
+        chmod +x \$CMD_DIR/setup-commands.sh
         
         echo 'CROPS/poky container commands installed successfully'
     "
