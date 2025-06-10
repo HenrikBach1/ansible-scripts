@@ -66,6 +66,160 @@ EOF
 # Copy the commands file to the container
 docker cp "$TMP_COMMANDS_FILE" "$CONTAINER_NAME:/tmp/container-commands.sh"
 
+# Function to install commands for all users in the container
+install_for_all_users() {
+    echo "Installing commands for all users in the container..."
+    
+    # Create system-wide commands in /usr/local/bin
+    docker exec "$CONTAINER_NAME" bash -c "
+        echo 'Installing system-wide commands in /usr/local/bin...'
+        # Create the command scripts
+        cat > /usr/local/bin/container-detach << 'EOC'
+#!/bin/bash
+echo 'Detaching from container (container keeps running)...'
+echo 'Container will continue running in the background.'
+touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+exit 0
+EOC
+
+        cat > /usr/local/bin/container-stop << 'EOC'
+#!/bin/bash
+echo 'Stopping container...'
+echo 'Container will be stopped but can be started again.'
+touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+exit 0
+EOC
+
+        cat > /usr/local/bin/container-remove << 'EOC'
+#!/bin/bash
+echo 'Removing container...'
+echo 'Container will be stopped and removed permanently.'
+touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+exit 0
+EOC
+
+        cat > /usr/local/bin/container-help << 'EOC'
+#!/bin/bash
+echo 'Container Commands:'
+echo '  - container-detach: Detach from the container (container keeps running)'
+echo '  - container-stop: Stop the container (container will be stopped but not removed)'
+echo '  - container-remove: Stop and remove the container completely'
+echo '  - container-help: Show this help message'
+EOC
+
+        # Make all command scripts executable
+        chmod 755 /usr/local/bin/container-* || true
+        
+        # Create global profile script to display help on login
+        if [ -d /etc/profile.d ]; then
+            echo 'Creating global profile script...'
+            cat > /etc/profile.d/container-commands.sh << 'EOC'
+#!/bin/bash
+# Container commands helper
+if [ -x /usr/local/bin/container-help ]; then
+    # Only show help if we're in an interactive shell
+    if [ -t 0 ]; then
+        /usr/local/bin/container-help
+    fi
+fi
+EOC
+            chmod 755 /etc/profile.d/container-commands.sh
+        fi
+        
+        # Create a fallback directory for systems where /usr/local/bin is not in the PATH
+        if [ -d /etc/profile.d ]; then
+            echo 'Ensuring /usr/local/bin is in PATH for all users...'
+            cat > /etc/profile.d/container-path.sh << 'EOC'
+#!/bin/bash
+# Ensure /usr/local/bin is in PATH
+case \":${PATH}:\" in
+    *:/usr/local/bin:*) ;;
+    *) export PATH=/usr/local/bin:$PATH ;;
+esac
+EOC
+            chmod 755 /etc/profile.d/container-path.sh
+        fi
+        
+        # For systems without profile.d, add to global bashrc if possible
+        if [ ! -d /etc/profile.d ] && [ -f /etc/bash.bashrc ] && [ -w /etc/bash.bashrc ]; then
+            echo 'Adding container commands to global bashrc...'
+            grep -q 'container-help' /etc/bash.bashrc || cat >> /etc/bash.bashrc << 'EOC'
+
+# Container commands helper
+if [ -x /usr/local/bin/container-help ]; then
+    # Only show help if we're in an interactive shell
+    if [ -t 0 ]; then
+        /usr/local/bin/container-help
+    fi
+fi
+
+# Ensure /usr/local/bin is in PATH
+case \":${PATH}:\" in
+    *:/usr/local/bin:*) ;;
+    *) export PATH=/usr/local/bin:$PATH ;;
+esac
+EOC
+        fi
+        
+        # Create aliases for home directories of existing users
+        echo 'Adding aliases to user home directories...'
+        for user_home in /home/*/ /root/; do
+            user_bashrc=\"${user_home}.bashrc\"
+            if [ -f \"$user_bashrc\" ] && [ -w \"$user_bashrc\" ]; then
+                username=$(basename \"$user_home\")
+                echo \"Setting up commands for user $username...\"
+                
+                # Remove any existing entries to avoid duplication
+                sed -i '/container-help/d' \"$user_bashrc\" 2>/dev/null || true
+                
+                # Add new entries
+                cat >> \"$user_bashrc\" << 'EOC'
+
+# Container commands helper
+if [ -x /usr/local/bin/container-help ]; then
+    # Only show help if we're in an interactive shell
+    if [ -t 0 ]; then
+        /usr/local/bin/container-help
+    fi
+fi
+
+# Ensure /usr/local/bin is in PATH
+case \":${PATH}:\" in
+    *:/usr/local/bin:*) ;;
+    *) export PATH=/usr/local/bin:$PATH ;;
+esac
+EOC
+            fi
+        done
+        
+        # Create fallback directory in /tmp for systems where /usr/local/bin is not writable
+        echo 'Creating fallback commands in /tmp...'
+        mkdir -p /tmp/container-commands
+        cp /usr/local/bin/container-* /tmp/container-commands/ 2>/dev/null || true
+        chmod 755 /tmp/container-commands/* 2>/dev/null || true
+        
+        # Add fallback to global profile
+        if [ -d /etc/profile.d ]; then
+            cat > /etc/profile.d/container-fallback.sh << 'EOC'
+#!/bin/bash
+# Fallback for container commands
+if [ ! -x /usr/local/bin/container-help ] && [ -d /tmp/container-commands ]; then
+    export PATH=/tmp/container-commands:$PATH
+    # Only show help if we're in an interactive shell
+    if [ -t 0 ] && [ -x /tmp/container-commands/container-help ]; then
+        /tmp/container-commands/container-help
+    fi
+fi
+EOC
+            chmod 755 /etc/profile.d/container-fallback.sh
+        fi
+        
+        echo 'Container commands installed system-wide successfully'
+    "
+    
+    return $?
+}
+
 # Create script to install the commands
 cat > "$TMP_COMMANDS_DIR/install-commands.sh" << 'EOF'
 #!/bin/bash
@@ -184,7 +338,11 @@ docker cp "$TMP_COMMANDS_DIR/install-commands.sh" "$CONTAINER_NAME:/tmp/install-
 # Make sure the script is executable by everyone (can be run by any user)
 docker exec "$CONTAINER_NAME" bash -c "chmod 755 /tmp/install-commands.sh || true"
 
-# Run the install script - first try as the specified user
+# First, attempt to install the commands system-wide for all users
+echo "Attempting to install container commands for all users..."
+install_for_all_users
+
+# Then, run the install script for the specified user if they exist
 if docker exec "$CONTAINER_NAME" bash -c "id -u $CONTAINER_USER" >/dev/null 2>&1; then
     # If the user exists, try to run as that user
     echo "Installing commands for user $CONTAINER_USER..."
@@ -207,7 +365,7 @@ if docker exec "$CONTAINER_NAME" bash -c "id -u $CONTAINER_USER" >/dev/null 2>&1
         fi
     fi
 else
-    # If the user doesn't exist, install for root
+    # If the user doesn't exist, just install for root
     echo "User $CONTAINER_USER doesn't exist in the container, installing for root..."
     docker exec "$CONTAINER_NAME" bash -c "/tmp/install-commands.sh"
 fi
@@ -292,63 +450,8 @@ EOC"
     fi
 fi
 
-# Add a fallback for system-wide installation if all other methods fail
-if [ $? -ne 0 ]; then
-    echo "All previous installation methods failed. Trying system-wide installation..."
-    
-    # Create commands directly in /usr/local/bin as this is almost always writable by root
-    docker exec "$CONTAINER_NAME" bash -c "
-        # Create system-wide commands in /usr/local/bin
-        echo '#!/bin/bash
-echo \"Detaching from container (container keeps running)...\"
-echo \"Container will continue running in the background.\"
-touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
-exit 0' > /usr/local/bin/container-detach && chmod +x /usr/local/bin/container-detach
-
-        echo '#!/bin/bash
-echo \"Stopping container...\"
-echo \"Container will be stopped but can be started again.\"
-touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
-exit 0' > /usr/local/bin/container-stop && chmod +x /usr/local/bin/container-stop
-
-        echo '#!/bin/bash
-echo \"Removing container...\"
-echo \"Container will be stopped and removed permanently.\"
-touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
-exit 0' > /usr/local/bin/container-remove && chmod +x /usr/local/bin/container-remove
-
-        echo '#!/bin/bash
-echo \"Container Commands:\"
-echo \"  - container-detach: Detach from the container (container keeps running)\"
-echo \"  - container-stop: Stop the container (container will be stopped but not removed)\"
-echo \"  - container-remove: Stop and remove the container completely\"
-echo \"  - container-help: Show this help message\"' > /usr/local/bin/container-help && chmod +x /usr/local/bin/container-help
-        
-        echo 'System-wide container commands installed in /usr/local/bin'
-    "
-    
-    # Try creating a global bashrc hook for all users
-    docker exec "$CONTAINER_NAME" bash -c "
-        # Try to add global bashrc hook if possible
-        if [ -w /etc/bash.bashrc ]; then
-            echo '# Container command helpers' >> /etc/bash.bashrc
-            echo 'if [ -x /usr/local/bin/container-help ]; then' >> /etc/bash.bashrc
-            echo '  container-help' >> /etc/bash.bashrc
-            echo 'fi' >> /etc/bash.bashrc
-            echo 'Global bashrc hook added'
-        elif [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
-            echo '#!/bin/bash' > /etc/profile.d/container-commands.sh
-            echo '# Container command helpers' >> /etc/profile.d/container-commands.sh
-            echo 'if [ -x /usr/local/bin/container-help ]; then' >> /etc/profile.d/container-commands.sh
-            echo '  container-help' >> /etc/profile.d/container-commands.sh
-            echo 'fi' >> /etc/profile.d/container-commands.sh
-            chmod +x /etc/profile.d/container-commands.sh
-            echo 'Global profile.d hook added'
-        fi
-    "
-    
-    echo "Installed container commands system-wide in /usr/local/bin as a fallback."
-fi
+# Run the global system-wide installer one more time to ensure commands are available for all users
+install_for_all_users
 
 # Special handling for CROPS/poky containers
 if docker exec "$CONTAINER_NAME" bash -c "grep -q crops/poky /etc/motd 2>/dev/null || grep -q poky /etc/motd 2>/dev/null || docker --version | grep -q Docker 2>/dev/null || [ -d /workdir ]"; then
@@ -416,10 +519,10 @@ EOC
         # Create a global bash hook
         if [ -w /etc/profile.d ]; then
             echo '#!/bin/bash' > /etc/profile.d/container-commands.sh
-            echo 'export PATH=\"\$CMD_DIR:\$PATH\"' >> /etc/profile.d/container-commands.sh
-            echo 'if [ -x \$CMD_DIR/container-help ]; then' >> /etc/profile.d/container-commands.sh
-            echo '  \$CMD_DIR/container-help' >> /etc/profile.d/container-commands.sh
-            echo 'fi' >> /etc/profile.d/container-commands.sh
+            echo "export PATH=\"\$CMD_DIR:\$PATH\"" >> /etc/profile.d/container-commands.sh
+            echo "if [ -x \$CMD_DIR/container-help ] && [ -t 0 ]; then" >> /etc/profile.d/container-commands.sh
+            echo "  \$CMD_DIR/container-help" >> /etc/profile.d/container-commands.sh
+            echo "fi" >> /etc/profile.d/container-commands.sh
             chmod +x /etc/profile.d/container-commands.sh
             echo 'Created global profile.d hook'
         fi
@@ -440,7 +543,7 @@ EOC
                 echo '  export PATH=\"/workdir/.container_commands:\$PATH\"' >> \"\$bashrc\"
                 echo 'fi' >> \"\$bashrc\"
                 echo '' >> \"\$bashrc\"
-                echo 'if command -v container-help >/dev/null 2>&1; then' >> \"\$bashrc\"
+                echo 'if command -v container-help >/dev/null 2>&1 && [ -t 0 ]; then' >> \"\$bashrc\"
                 echo '  container-help' >> \"\$bashrc\"
                 echo 'fi' >> \"\$bashrc\"
                 echo \"Updated \$bashrc\"
@@ -496,6 +599,9 @@ EOC
     echo "Container commands added to CROPS/poky container $CONTAINER_NAME."
     echo "Commands will be available in all new shell sessions."
     
+    # Run one final system-wide install to ensure maximum compatibility
+    install_for_all_users
+    
     # Exit early as we've handled this special case
     exit 0
 fi
@@ -503,6 +609,6 @@ fi
 # Clean up temporary files
 rm -rf "$TMP_COMMANDS_DIR"
 
-echo "Container commands successfully added to $CONTAINER_NAME for user $CONTAINER_USER."
+echo "Container commands successfully added to $CONTAINER_NAME for all users."
 echo "Commands will be available in all new shell sessions."
 echo "In VS Code Attach to Container sessions, these commands will also be available."
