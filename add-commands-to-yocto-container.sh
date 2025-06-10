@@ -201,8 +201,6 @@ docker exec "$CONTAINER_NAME" bash -c '
         cp "$CMD_DIR/container-init.sh" /etc/profile.d/container-init.sh 2>/dev/null || true
         chmod +x /etc/profile.d/container-init.sh 2>/dev/null || true
         echo "Added to profile.d"
-    else
-        echo "Cannot add to profile.d (no permission)"
     fi
     
     # Add to bashrc files
