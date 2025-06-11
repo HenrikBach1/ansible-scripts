@@ -13,7 +13,7 @@ source "$SCRIPT_DIR/run-container-common.sh"
 # Default values
 ENV_TYPE="yocto"
 CONTAINER_NAME="yocto_container"
-WORKSPACE_DIR="$HOME/projects/yocto"
+WORKSPACE_DIR="$HOME/projects"
 GPU_SUPPORT=false
 CUSTOM_CMD="bash"
 PERSISTENT=true
@@ -215,6 +215,18 @@ for arg in "$@"; do
     fi
     if [[ "$arg" == "--show-running" ]]; then
         show_running_container_config
+        exit 0
+    fi
+    if [[ "$arg" == "--verify" ]]; then
+        # If a container name is provided, use it
+        if [[ -n "$2" ]]; then
+            VERIFY_CONTAINER="$2"
+            shift
+        else
+            # Otherwise, use the default container name
+            VERIFY_CONTAINER="$CONTAINER_NAME"
+        fi
+        verify_container "$VERIFY_CONTAINER"
         exit 0
     fi
 done
@@ -558,12 +570,12 @@ if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then
 fi
 
 # Add container commands to the container
-if [ -f "$(dirname "$0")/add-commands-to-yocto-container.sh" ]; then
+if [ -f "$(dirname "$0")/add-commands-to-container-robust.sh" ]; then
     echo "Adding container commands to $CONTAINER_NAME..."
-    # Use the Yocto-specific script for CROPS/poky containers
-    bash "$(dirname "$0")/add-commands-to-yocto-container.sh" "$CONTAINER_NAME"
+    # Use the unified script for all container types
+    bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME"
     
-    # No need to add init script, as add-commands-to-yocto-container.sh already handles this
+    # No need to add init script, as add-commands-to-container-robust.sh already handles this
 fi
 
 # If auto-attach is enabled, connect to the container
@@ -575,3 +587,109 @@ if [ "$AUTO_ATTACH" = true ]; then
 fi
 
 exit 0
+
+# Function to verify workspace paths
+verify_workspace_paths() {
+    local CONTAINER_NAME="$1"
+    echo "Verifying workspace paths for $CONTAINER_NAME..."
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container $CONTAINER_NAME is not running. Starting it..."
+        docker start "$CONTAINER_NAME" > /dev/null 2>&1
+        sleep 2
+    fi
+    
+    # Check the mount points
+    echo "Checking container mount points..."
+    local MOUNTS=$(docker inspect --format='{{range .Mounts}}{{.Source}} -> {{.Destination}}{{printf "\n"}}{{end}}' "$CONTAINER_NAME")
+    echo "$MOUNTS"
+    
+    # Verify workspace structure
+    echo "Verifying workspace directory structure..."
+    docker exec -it "$CONTAINER_NAME" bash -c "
+        # Make sure all workspace directories exist
+        mkdir -p /workdir 2>/dev/null || true
+        mkdir -p /workspace 2>/dev/null || true
+        mkdir -p /projects 2>/dev/null || true
+        
+        # Fix symlinks to ensure compatibility
+        rm -f /workspace 2>/dev/null || true
+        rm -f /workdir 2>/dev/null || true
+        ln -sf /projects /workspace 2>/dev/null || true
+        ln -sf /projects /workdir 2>/dev/null || true
+        
+        echo 'Current workspace structure:'
+        ls -la / | grep -E 'projects|workdir|workspace'
+    "
+    
+    echo "Workspace path verification complete."
+}
+
+# Add --verify-workspace option parsing
+for arg in "$@"; do
+    case $arg in
+        --verify-workspace)
+            VERIFY_WORKSPACE=true
+            shift
+            ;;
+    esac
+done
+
+# If verify workspace is requested, run it after container is started
+if [ "$VERIFY_WORKSPACE" = true ]; then
+    verify_workspace_paths "$CONTAINER_NAME"
+fi
+
+# Function to verify workspace paths
+verify_workspace_paths() {
+    local CONTAINER_NAME="$1"
+    echo "Verifying workspace paths for $CONTAINER_NAME..."
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+        echo "Container $CONTAINER_NAME is not running. Starting it..."
+        docker start "$CONTAINER_NAME" > /dev/null 2>&1
+        sleep 2
+    fi
+    
+    # Check the mount points
+    echo "Checking container mount points..."
+    local MOUNTS=$(docker inspect --format='{{range .Mounts}}{{.Source}} -> {{.Destination}}{{printf "\n"}}{{end}}' "$CONTAINER_NAME")
+    echo "$MOUNTS"
+    
+    # Verify workspace structure
+    echo "Verifying workspace directory structure..."
+    docker exec -it "$CONTAINER_NAME" bash -c "
+        # Make sure all workspace directories exist
+        mkdir -p /workdir 2>/dev/null || true
+        mkdir -p /workspace 2>/dev/null || true
+        mkdir -p /projects 2>/dev/null || true
+        
+        # Fix symlinks to ensure compatibility
+        rm -f /workspace 2>/dev/null || true
+        rm -f /workdir 2>/dev/null || true
+        ln -sf /projects /workspace 2>/dev/null || true
+        ln -sf /projects /workdir 2>/dev/null || true
+        
+        echo 'Current workspace structure:'
+        ls -la / | grep -E 'projects|workdir|workspace'
+    "
+    
+    echo "Workspace path verification complete."
+}
+
+# Add --verify-workspace option parsing
+for arg in "$@"; do
+    case $arg in
+        --verify-workspace)
+            VERIFY_WORKSPACE=true
+            shift
+            ;;
+    esac
+done
+
+# If verify workspace is requested, run it after container is started
+if [ "$VERIFY_WORKSPACE" = true ]; then
+    verify_workspace_paths "$CONTAINER_NAME"
+fi

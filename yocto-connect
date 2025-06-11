@@ -17,36 +17,70 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     sleep 1
 fi
 
-# Add container commands before connecting
-if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
-    echo "Ensuring container commands are available..."
-    # For CROPS/poky containers, use root as the user
-    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "root"
-fi
+# Create container commands directly
+echo "Ensuring container commands are available..."
+docker exec "$CONTAINER_NAME" bash -c "
+# Create directory for container commands
+mkdir -p /tmp/.container_commands
 
-# Connect to the container
-echo "Connecting to $CONTAINER_NAME..."
-# Create a temporary script that sets up the environment and then launches bash
-TMP_SCRIPT=$(mktemp)
-cat > "$TMP_SCRIPT" << 'EOF'
+# Create container-detach command
+cat > /tmp/.container_commands/container-detach << 'EOC'
 #!/bin/bash
-# First, check if container commands are in the usual places
-if [ -d "/tmp/.container_commands" ]; then
-  export PATH="/tmp/.container_commands:$PATH"
-elif [ -d "/workdir/.container_commands" ]; then
-  export PATH="/workdir/.container_commands:$PATH"
-elif [ -d "/usr/local/bin" ]; then
-  # Commands might be in /usr/local/bin directly
-  true
-fi
+echo 'Detaching from container (container keeps running)...'
+echo 'Container will continue running in the background.'
+touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+exit 0
+EOC
+chmod +x /tmp/.container_commands/container-detach
+ln -sf /tmp/.container_commands/container-detach /tmp/.container_commands/detach
 
-# Create shell functions as a fallback
-container-detach() {
-  echo 'Detaching from container (container keeps running)...'
-  echo 'Container will continue running in the background.'
-  touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
-  exit 0
-}
+# Create container-stop command
+cat > /tmp/.container_commands/container-stop << 'EOC'
+#!/bin/bash
+echo 'Stopping container...'
+echo 'Container will be stopped but can be started again.'
+touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+exit 0
+EOC
+chmod +x /tmp/.container_commands/container-stop
+ln -sf /tmp/.container_commands/container-stop /tmp/.container_commands/stop
+
+# Create container-remove command
+cat > /tmp/.container_commands/container-remove << 'EOC'
+#!/bin/bash
+echo 'Removing container...'
+echo 'Container will be stopped and removed permanently.'
+touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+exit 0
+EOC
+chmod +x /tmp/.container_commands/container-remove
+ln -sf /tmp/.container_commands/container-remove /tmp/.container_commands/remove
+
+# Create container-help command
+cat > /tmp/.container_commands/container-help << 'EOC'
+#!/bin/bash
+echo 'Container Commands:'
+echo '  - container-detach (or detach): Detach from the container (container keeps running)'
+echo '  - container-stop (or stop): Stop the container (container will be stopped but not removed)'
+echo '  - container-remove (or remove): Stop and remove the container completely'
+echo '  - container-help (or help): Show this help message'
+EOC
+chmod +x /tmp/.container_commands/container-help
+ln -sf /tmp/.container_commands/container-help /tmp/.container_commands/help
+
+# Add to bashrc if not already there
+if ! grep -q 'export PATH=/tmp/.container_commands' /root/.bashrc; then
+  echo 'export PATH=/tmp/.container_commands:\$PATH' >> /root/.bashrc
+fi
+"
+
+# Connect to the container with the commands in PATH
+echo "Connecting to $CONTAINER_NAME..."
+docker exec -it "$CONTAINER_NAME" bash -c "
+export PATH=/tmp/.container_commands:\$PATH
+/tmp/.container_commands/container-help
+exec bash
+"
 
 container-stop() {
   echo 'Stopping container...'
@@ -64,8 +98,8 @@ container-remove() {
 
 container-help() {
   echo 'Container Commands:'
-  echo '  - container-detach: Detach from the container (container keeps running)'
-  echo '  - container-stop: Stop the container (container will be stopped but not removed)'
+  echo "  - container-detach: Detach from the container (container keeps running)"
+  echo "  - container-stop: Stop the container (container will be stopped but not removed)"
   echo '  - container-remove: Stop and remove the container completely'
   echo '  - container-help: Show this help message'
 }

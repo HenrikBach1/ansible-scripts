@@ -113,6 +113,7 @@ show_container_help() {
     echo "  --remove-config NAME   Remove a saved container configuration"
     echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
     echo "  --fix [NAME]           Fix a container that keeps exiting"
+    echo "  --verify [NAME]        Verify container configuration and commands"
     echo "  -h, --help             Display this help message"
     echo ""
     echo "Examples:"
@@ -144,6 +145,93 @@ show_container_help() {
     echo "  - If stopped, it will start it and attach to it"
     echo "  - If it doesn't exist, it will create a new container"
     exit 0
+}
+
+# Function to verify container configuration
+verify_container() {
+    local CONTAINER_NAME="$1"
+    
+    # If no container name provided, check all running containers
+    if [ -z "$CONTAINER_NAME" ]; then
+        CONTAINERS=$(docker ps --format '{{.Names}}')
+        if [ -z "$CONTAINERS" ]; then
+            echo "No running containers found."
+            return 1
+        fi
+        echo "Checking all running containers: $CONTAINERS"
+    else
+        CONTAINERS="$CONTAINER_NAME"
+        # Check if container exists and is running
+        if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+            echo "Container $CONTAINER_NAME is not running. Starting it..."
+            docker start "$CONTAINER_NAME" > /dev/null 2>&1 || {
+                echo "Failed to start container. Please check the container name."
+                return 1
+            }
+            sleep 2
+        fi
+    fi
+
+    # Process each container
+    for CONTAINER in $CONTAINERS; do
+        echo "==============================================="
+        echo "Verifying container: $CONTAINER"
+        echo "==============================================="
+        
+        echo -e "\n=== Verifying Workspace Path ==="
+        docker exec -it "$CONTAINER" bash -c "
+            echo 'Workspace directories:'
+            ls -la / | grep -E 'projects|workdir|workspace'
+            
+            echo -e '\nWorkspace content:'
+            ls -la /projects/ 2>/dev/null || echo 'No /projects directory found'
+            
+            echo -e '\nSymlink structure:'
+            readlink /workdir 2>/dev/null || echo '/workdir is not a symlink'
+            readlink /workspace 2>/dev/null || echo '/workspace is not a symlink'
+        "
+        
+        echo -e "\n=== Verifying Container Commands ==="
+        docker exec -it "$CONTAINER" bash -c "
+            echo 'Available container commands:'
+            
+            # Check if container-help is in PATH
+            which container-help 2>/dev/null || echo 'container-help not found in PATH'
+            which container-detach 2>/dev/null || echo 'container-detach not found in PATH'
+            
+            echo -e '\nPath environment:'
+            echo \$PATH
+            
+            echo -e '\nContents of command directories:'
+            ls -la /tmp/container-commands/ 2>/dev/null || echo '/tmp/container-commands/ not found'
+            ls -la /tmp/.container_commands/ 2>/dev/null || echo '/tmp/.container_commands/ not found'
+            
+            echo -e '\nTesting container-help command:'
+            container-help 2>/dev/null || {
+                if [ -f /tmp/container-commands/container-help ]; then
+                    /tmp/container-commands/container-help
+                elif [ -f /tmp/.container_commands/container-help ]; then
+                    /tmp/.container_commands/container-help
+                else
+                    echo 'container-help command not found'
+                fi
+            }
+        "
+        
+        echo -e "\n=== Test Complete for $CONTAINER ==="
+        echo "If you see container command output above, the commands are working."
+        echo "If you see /projects in the workspace listing, the workspace path is correct."
+        echo ""
+    done
+
+    echo "All containers verified."
+    echo ""
+    echo "Recommendations:"
+    echo "1. If container commands are missing, run: ./add-commands-to-container.sh CONTAINER_NAME"
+    echo "2. If workspace paths are incorrect, restart the container with: docker restart CONTAINER_NAME"
+    echo "3. For persistent fixes, update the container start scripts"
+    
+    return 0
 }
 
 # Function to run the container
@@ -373,14 +461,14 @@ run_container() {
     fi
     
     # Add container commands to the container
-    if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
+    if [ -f "$(dirname "$0")/add-commands-to-container-robust.sh" ]; then
         echo "Adding container commands to $CONTAINER_NAME..."
         # For ROS2 containers, use ubuntu as the user
         if [ "$ENV_TYPE" = "ros2" ]; then
-            bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "ubuntu"
+            bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME" "ubuntu"
         else
             # For Yocto and other containers, use the current user
-            bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "$(id -un)"
+            bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME" "$(id -un)"
         fi
     fi
 }

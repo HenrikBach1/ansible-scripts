@@ -54,6 +54,20 @@ _container_management_completion() {
     fi
 }
 
+# Setup keyboard shortcut for container detach
+_setup_container_detach_shortcut() {
+    # Setup a keyboard shortcut (Ctrl+X then d) to detach from containers
+    # This will be used in addition to the 'container-detach' command
+    if [[ "$TERM" != "" ]]; then
+        # Only setup if we're in a terminal
+        bind '"\C-xd": "container-detach\n"' 2>/dev/null || true
+        # Also provide a simpler Ctrl+\ shortcut
+        bind '"\C-\\": "container-detach\n"' 2>/dev/null || true
+        # Direct detach command using touch marker file (bypasses container-detach command)
+        bind '"\C-xq": "touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested; exit\n"' 2>/dev/null || true
+    fi
+}
+
 # Add completions for container commands available inside containers
 _container_commands_completion() {
     local curr_arg;
@@ -67,9 +81,8 @@ _container_commands_completion() {
 
 # Main container command installation scripts
 complete -F _add_commands_to_container_completion add-commands-to-container.sh
-complete -F _add_commands_to_container_completion add-commands-to-poky-container.sh
-complete -F _add_commands_to_container_completion add-commands-to-yocto-container.sh
 complete -F _container_names_completion example-add-commands-to-yocto.sh
+complete -F _container_names_completion example-add-commands-to-container.sh
 
 # Docker exec wrappers
 complete -F _docker_exec_completion docker-exec-it
@@ -99,5 +112,8 @@ complete -F _container_commands_completion detach
 complete -F _container_commands_completion stop
 complete -F _container_commands_completion remove
 complete -F _container_commands_completion help
+
+# Setup keyboard shortcut for container detach
+_setup_container_detach_shortcut
 
 echo "Container command completion loaded"

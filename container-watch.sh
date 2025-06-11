@@ -193,6 +193,24 @@ while true; do
         fi
     fi
     
+    # Check if container has detach marker file in /tmp (universal fallback location)
+    if sudo docker exec "$CONTAINER_NAME" test -f /tmp/.container_detach_requested 2>/dev/null; then
+        # Only show this message if debug mode is enabled
+        if [ "$DEBUG" = "true" ]; then
+            echo "Universal detach marker detected in /tmp, ensuring container stays running..."
+        fi
+        
+        # Remove the marker file
+        sudo docker exec "$CONTAINER_NAME" rm -f /tmp/.container_detach_requested 2>/dev/null
+        
+        # Check if container is still running
+        if ! sudo docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" &>/dev/null; then
+            echo "Container $CONTAINER_NAME stopped after detach, restarting it..."
+            sudo docker start "$CONTAINER_NAME"
+            echo "Container $CONTAINER_NAME restarted and is now running in the background."
+        fi
+    fi
+    
     # Periodically ensure the keep-alive process is running (every 10 cycles)
     if [ $((SECONDS % 10)) -eq 0 ]; then
         # Only execute if the container is running

@@ -30,9 +30,9 @@ fi
 '
 
 # Add container commands before connecting
-if [ -f "$(dirname "$0")/add-commands-to-container.sh" ]; then
+if [ -f "$(dirname "$0")/add-commands-to-container-robust.sh" ]; then
     echo "Ensuring container commands are available..."
-    bash "$(dirname "$0")/add-commands-to-container.sh" "$CONTAINER_NAME" "ubuntu"
+    bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME" "ubuntu"
 fi
 
 # Connect to the container

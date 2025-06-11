@@ -2,8 +2,10 @@
 
 This repository contains Ansible scripts and supporting shell scripts for setting up and managing development environments in Docker containers.
 
-> **Quick Start Tip**: If a container already exists, you can directly use `./ros2-connect` or `./yocto-connect` 
-> to connect to it. These scripts will start the container if needed and provide all container commands.
+> **Quick Start Tips**: 
+> - If a container already exists, you can directly use `./ros2-connect` or `./yocto-connect` to connect to it
+> - These scripts will start the container if needed and provide all container commands
+> - To verify a container's setup is correct, use `./start-yocto-container.sh --verify` or `./start-ros2-container.sh --verify`
 
 ## Container Types
 
@@ -17,6 +19,12 @@ This repository provides scripts for two types of development containers:
 ### Standard Scripts
 - `start-ros2-container.sh`: Standard ROS2 container runner
 - `start-yocto-container.sh`: Standard Yocto container runner
+
+### Container Management Options
+- `--attach`: Connect to the container after starting it
+- `--stop`: Stop a running container
+- `--remove`: Remove a container (stops it first if running)
+- `--verify`: Verify container commands and workspace paths are correctly configured
 
 ### Robust Container Scripts
 For more reliable container lifecycle management, especially when using detached commands or VS Code:
@@ -42,12 +50,20 @@ All development containers in this repository share these common features:
   - `container-remove`: Stop and remove the container completely
   - `container-help`: Show all available container commands
 
+These commands are available in all containers, regardless of how you connect to them. For troubleshooting command availability, use the `--verify` option with the container start scripts.
+
 These features are implemented through a shared script (`run-container-common.sh`) that is used by the environment-specific container scripts. This modular approach reduces code duplication and ensures consistent behavior across different development environments.
 
 ## Helper Scripts
 
-- `add-commands-to-container.sh`: Adds standardized container commands to any Docker container. This script is called automatically by container creation scripts, but can also be used manually to add commands to existing containers.
+- `container-command-common.sh`: Shared library of functions for container command installation and management
+- `add-commands-to-container.sh`: Adds standardized container commands to any Docker container using the shared library
+- `ensure-yocto-container-commands.sh`: Specialized script for ensuring container commands are properly installed in Yocto containers (uses the same shared library)
 - `container-watch.sh`: Background process that monitors containers and handles detach/stop/remove requests
+- `verify-container.sh`: Quick verification tool to check if a container's commands and workspace paths are properly configured
+- `maintain-container-scripts.sh`: Maintenance tool for cleaning up temporary files and verifying container configurations
+
+> **Note on Command Installation**: Both command installation scripts now use a shared library (`container-command-common.sh`) with consistent behavior. Use `add-commands-to-container.sh` for most containers and `ensure-yocto-container-commands.sh` for specialized Yocto container setups requiring extra reliability.
 
 ## Container Connection Methods
 
@@ -375,6 +391,53 @@ The robust container scripts provide these key advantages:
 6. **VS Code Friendly**: Optimized for use with VS Code Remote Development
 
 If you encounter issues with containers stopping unexpectedly when using VS Code Remote Development or running detached commands, the robust container scripts are the recommended solution.
+
+## Troubleshooting and Maintenance
+
+### Container Commands Not Available
+
+If container commands like `container-detach` are not available in your container session:
+
+1. Verify the container's configuration:
+   ```bash
+   ./verify-container.sh CONTAINER_NAME
+   ```
+
+2. Reinstall the commands:
+   ```bash
+   ./add-commands-to-container.sh CONTAINER_NAME
+   ```
+
+### Workspace Path Issues
+
+If you encounter issues with workspace paths (especially in Yocto containers):
+
+1. Verify the container's configuration:
+   ```bash
+   ./verify-container.sh CONTAINER_NAME
+   ```
+
+2. Restart the container with the correct configuration:
+   ```bash
+   docker stop CONTAINER_NAME
+   ./start-yocto-container.sh --name CONTAINER_NAME
+   ```
+
+### Container Cleanup and Maintenance
+
+To clean up temporary files and verify container configurations:
+
+```bash
+./maintain-container-scripts.sh
+```
+
+This script will:
+- Check for running containers and verify their configurations
+- Find and remove backup files (.bak, ~, .old, .orig)
+- Remove temporary fix scripts
+- Clean up example and deprecated scripts
+
+For more detailed information about container commands, configuration, and troubleshooting, see [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
 
 ## Additional Documentation
 
