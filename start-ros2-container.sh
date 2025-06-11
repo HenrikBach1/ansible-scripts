@@ -261,6 +261,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Clean up any system files in workspace before starting container
 # Container image selection
 # For custom builds, use ros2_workspace:$ROS2_DISTRO
 # For standard builds, use osrf/ros:$ROS2_DISTRO-desktop

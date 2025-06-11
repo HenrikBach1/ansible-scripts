@@ -13,6 +13,9 @@ echo "Watching container $CONTAINER_NAME..."
 # For debugging purposes
 DEBUG=true
 
+# Initialize counter for periodic temp file cleanup
+COUNTER=0
+
 while true; do
     # Check if container exists
     if ! sudo docker inspect "$CONTAINER_NAME" &>/dev/null; then
@@ -206,6 +209,20 @@ while true; do
                 fi
             ' >/dev/null 2>&1 || true
         fi
+    fi
+    
+    # Periodically clean up temporary files (once every 10 checks)
+    COUNTER=$((COUNTER+1))
+    if [ $COUNTER -ge 10 ]; then
+        # Check if the cleanup script exists and run it
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [ -x "$SCRIPT_DIR/cleanup-container-temp-files.sh" ]; then
+            if [ "$DEBUG" = true ]; then
+                echo "Running temporary file cleanup..."
+            fi
+            "$SCRIPT_DIR/cleanup-container-temp-files.sh" > /dev/null 2>&1
+        fi
+        COUNTER=0
     fi
     
     # Sleep to avoid excessive CPU usage

@@ -492,10 +492,17 @@ fi
 # This prevents workspace pollution from previous container runs
 if [ -d "$WORKSPACE_DIR" ]; then
     echo "Cleaning up container system files from workspace..."
-    # Remove container system files if they exist
-    rm -f "$WORKSPACE_DIR/container-init.sh" 2>/dev/null || true
-    rm -f "$WORKSPACE_DIR/yocto-container-bashrc.sh" 2>/dev/null || true
-    rm -rf "$WORKSPACE_DIR/keepalive" 2>/dev/null || true
+    # Run the dedicated cleanup script if it exists
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -x "$SCRIPT_DIR/cleanup-container-temp-files.sh" ]; then
+        "$SCRIPT_DIR/cleanup-container-temp-files.sh"
+    else
+        # Fallback to basic cleanup if script doesn't exist
+        # Remove container system files if they exist
+        rm -f "$WORKSPACE_DIR/container-init.sh" 2>/dev/null || true
+        rm -f "$WORKSPACE_DIR/yocto-container-bashrc.sh" 2>/dev/null || true
+        rm -rf "$WORKSPACE_DIR/keepalive" 2>/dev/null || true
+    fi
 fi
 
 # Run the container with a modified command that ensures it stays alive

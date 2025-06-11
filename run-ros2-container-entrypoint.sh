@@ -21,6 +21,25 @@ fi
 # Get container information
 CONTAINER_ID=$(hostname)
 
+# Create a separate directory for temporary and system files that won't pollute the workspace
+mkdir -p /tmp/.container_commands 2>/dev/null || true
+mkdir -p /tmp/bin 2>/dev/null || true
+mkdir -p /tmp/keepalive 2>/dev/null || true
+
+# Add /tmp/bin to PATH if not already there
+if [[ ":$PATH:" != *":/tmp/bin:"* ]]; then
+    export PATH="/tmp/bin:$PATH"
+fi
+
+# Also add the fallback command location to PATH
+if [[ ":$PATH:" != *":/tmp/.container_commands:"* ]]; then
+    export PATH="/tmp/.container_commands:$PATH"
+fi
+
+# Store all keep-alive related files in this separate directory, not in the mounted volumes
+KEEPALIVE_DIR="/tmp/keepalive"
+mkdir -p $KEEPALIVE_DIR
+
 # Try to create workspace directory - don't error if it fails
 mkdir -p /workspace 2>/dev/null || true
 mkdir -p /projects 2>/dev/null || true
@@ -251,26 +270,26 @@ EOF
 
 echo "if [ -f ~/.bash_completion ]; then . ~/.bash_completion; fi" >> $HOME/.bashrc
 
-# Create executable scripts in bin directory
-cat > $HOME/bin/detach << 'EOF'
+# Create executable scripts in /tmp/bin directory
+cat > /tmp/bin/detach << 'EOF'
 #!/bin/bash
 echo "Detaching from container (container keeps running)..."
 echo "Container will continue running in the background."
 
 # Create a marker file to signal we want to detach
-touch $HOME/.container_detach_requested
+touch $HOME/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
 
 # Force disconnect from tty while ensuring container keeps running
 kill -HUP $PPID || builtin exit 0
 EOF
 
-cat > $HOME/bin/stop << 'EOF'
+cat > /tmp/bin/stop << 'EOF'
 #!/bin/bash
 echo "Stopping container..."
 echo "Container will be completely stopped (not just detached)."
 
 # Create a marker file to indicate we want to stop the container
-touch $HOME/.container_stop_requested
+touch $HOME/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
 
 # Kill any background processes keeping the container alive
 pkill -f "sleep 3600" || true
@@ -283,8 +302,28 @@ echo "Terminating session now..."
 builtin exit 0
 EOF
 
+# Add container-remove command
+cat > /tmp/bin/container-remove << 'EOF'
+#!/bin/bash
+echo "Removing container..."
+echo "Container will be stopped and removed permanently."
+
+# Create a marker file to indicate we want to remove the container
+touch $HOME/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+
+# Kill any background processes keeping the container alive
+pkill -f "sleep 3600" || true
+
+# Output a clear message about what's happening
+echo "Container removal requested. Container will be stopped and removed."
+echo "Terminating session now..."
+
+# Use exit directly - this will terminate the bash session
+builtin exit 0
+EOF
+
 # Create a help script
-cat > $HOME/bin/container-help << 'EOF'
+cat > /tmp/bin/container-help << 'EOF'
 #!/bin/bash
 echo "ROS2 Container Command Guide:"
 echo "-----------------------------"
@@ -310,7 +349,7 @@ chmod +x $HOME/bin/stop
 ln -sf $HOME/bin/detach $HOME/bin/exit
 
 # Add the bin directory to PATH
-export PATH="$HOME/bin:$PATH"
+export PATH="$HOME/bin:/tmp/bin:/tmp/.container_commands:$PATH"
 
 # Run container-help at login, but only add it once
 if ! grep -q "container-help" $HOME/.bashrc; then
@@ -332,3 +371,21 @@ fi
 # The trap will keep the container running
 echo "Interactive session ended, but container will keep running in the background."
 echo "To reconnect: docker attach ros2_container"
+
+# Make all scripts executable
+chmod +x /tmp/bin/* 2>/dev/null || true
+
+# Create symbolic links in user's bin directory if it exists
+if [ -d "$HOME/bin" ]; then
+  ln -sf /tmp/bin/detach $HOME/bin/detach 2>/dev/null || true
+  ln -sf /tmp/bin/stop $HOME/bin/stop 2>/dev/null || true
+  ln -sf /tmp/bin/container-remove $HOME/bin/container-remove 2>/dev/null || true
+  ln -sf /tmp/bin/container-help $HOME/bin/container-help 2>/dev/null || true
+fi
+
+# Also create links in /tmp/.container_commands for consistency
+ln -sf /tmp/bin/detach /tmp/.container_commands/detach 2>/dev/null || true
+ln -sf /tmp/bin/stop /tmp/.container_commands/stop 2>/dev/null || true
+ln -sf /tmp/bin/container-remove /tmp/.container_commands/container-remove 2>/dev/null || true
+ln -sf /tmp/bin/container-help /tmp/.container_commands/container-help 2>/dev/null || true
+chmod +x /tmp/.container_commands/* 2>/dev/null || true
