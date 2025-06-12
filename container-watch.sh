@@ -11,7 +11,7 @@ fi
 echo "Watching container $CONTAINER_NAME..."
 
 # For debugging purposes
-DEBUG=true
+DEBUG=false
 
 # Initialize counter for periodic temp file cleanup
 COUNTER=0

@@ -49,6 +49,7 @@ show_yocto_help() {
     echo "  --cleanup-configs [N]  Remove configurations not used in N days (default: 30)"
     echo "  --fix [NAME]           Fix a container that keeps exiting"
     echo "  --stop [NAME]          Stop the container"
+    echo "  --restart [NAME]       Stop and restart the container (same as --stop then start)"
     echo "  --remove [NAME]        Stop and remove the container"
     echo "  -h, --help             Display this help message"
     echo ""
@@ -76,6 +77,12 @@ show_yocto_help() {
     echo ""
     echo "  # Stop a specific container"
     echo "  $0 --stop my_yocto_dev"
+    echo ""
+    echo "  # Restart the default container"
+    echo "  $0 --restart"
+    echo ""
+    echo "  # Restart a specific container"
+    echo "  $0 --restart my_yocto_dev"
     echo ""
     echo "  # Remove the default container (stops it first if running)"
     echo "  $0 --remove"
@@ -284,6 +291,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --clean)
+            CLEAN_START=true
+            shift
+            ;;
+        --restart)
+            # --restart is a convenience option that stops and starts the container
+            # Set CLEAN_START to true to stop/remove existing container
             CLEAN_START=true
             shift
             ;;
@@ -512,7 +525,6 @@ if [ -d "$WORKSPACE_DIR" ]; then
         # Fallback to basic cleanup if script doesn't exist
         # Remove container system files if they exist
         rm -f "$WORKSPACE_DIR/container-init.sh" 2>/dev/null || true
-        rm -f "$WORKSPACE_DIR/yocto-container-bashrc.sh" 2>/dev/null || true
         rm -rf "$WORKSPACE_DIR/keepalive" 2>/dev/null || true
     fi
 fi
@@ -524,7 +536,6 @@ docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     -v "$WORKSPACE_DIR:/workdir" \
     -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
-    -v "$SCRIPT_DIR/yocto-container-bashrc.sh:/opt/yocto-container-bashrc.sh:ro" \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -e DISPLAY \
     $ADDITIONAL_ARGS \

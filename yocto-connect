@@ -1,5 +1,6 @@
 #!/bin/bash
-# Helper script for connecting to the Yocto container with detach support
+# Simplified Yocto container connection script
+# Uses unified container-shell-setup.sh for all functionality
 
 CONTAINER_NAME="${1:-yocto_container}"
 
@@ -17,141 +18,91 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     sleep 1
 fi
 
-# Create container commands directly
-echo "Ensuring container commands are available..."
-docker exec "$CONTAINER_NAME" bash -c "
-# Create directory for container commands
-mkdir -p /tmp/.container_commands
-
-# Create container-detach command
-cat > /tmp/.container_commands/container-detach << 'EOC'
-#!/bin/bash
-echo 'Detaching from container (container keeps running)...'
-echo 'Container will continue running in the background.'
-touch \$HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
-exit 0
-EOC
-chmod +x /tmp/.container_commands/container-detach
-ln -sf /tmp/.container_commands/container-detach /tmp/.container_commands/detach
-
-# Create container-stop command
-cat > /tmp/.container_commands/container-stop << 'EOC'
-#!/bin/bash
-echo 'Stopping container...'
-echo 'Container will be stopped but can be started again.'
-touch \$HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
-exit 0
-EOC
-chmod +x /tmp/.container_commands/container-stop
-ln -sf /tmp/.container_commands/container-stop /tmp/.container_commands/stop
-
-# Create container-remove command
-cat > /tmp/.container_commands/container-remove << 'EOC'
-#!/bin/bash
-echo 'Removing container...'
-echo 'Container will be stopped and removed permanently.'
-touch \$HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
-exit 0
-EOC
-chmod +x /tmp/.container_commands/container-remove
-ln -sf /tmp/.container_commands/container-remove /tmp/.container_commands/remove
-
-# Create container-help command
-cat > /tmp/.container_commands/container-help << 'EOC'
-#!/bin/bash
-echo 'Container Commands:'
-echo '  - container-detach (or detach): Detach from the container (container keeps running)'
-echo '  - container-stop (or stop): Stop the container (container will be stopped but not removed)'
-echo '  - container-remove (or remove): Stop and remove the container completely'
-echo '  - container-help (or help): Show this help message'
-EOC
-chmod +x /tmp/.container_commands/container-help
-ln -sf /tmp/.container_commands/container-help /tmp/.container_commands/help
-
-# Add to bashrc if not already there
-if ! grep -q 'export PATH=/tmp/.container_commands' /root/.bashrc; then
-  echo 'export PATH=/tmp/.container_commands:\$PATH' >> /root/.bashrc
+# Set up container environment if not already done
+# Check if commands exist, if not run setup
+if ! docker exec "$CONTAINER_NAME" test -f "/usr/local/bin/container-help" 2>/dev/null; then
+    echo "Setting up container environment..."
+    
+    # Copy the unified setup script to container
+    docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"
+    
+    # Run the setup script inside the container as root to ensure system-wide installation
+    docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+else
+    echo "Container environment already configured."
 fi
-"
 
-# Connect to the container with the commands in PATH
+# Connect to container with enhanced environment
 echo "Connecting to $CONTAINER_NAME..."
 docker exec -it "$CONTAINER_NAME" bash -c "
-export PATH=/tmp/.container_commands:\$PATH
-/tmp/.container_commands/container-help
-exec bash
-"
+# Source the shell environment (for immediate use)
+export PATH=\"\$HOME/bin:/tmp/.container_commands:\$PATH\"
 
-container-stop() {
-  echo 'Stopping container...'
-  echo 'Container will be stopped but can be started again.'
-  touch $HOME/.container_stop_requested 2>/dev/null || touch /workdir/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
-  exit 0
-}
-
-container-remove() {
-  echo 'Removing container...'
-  echo 'Container will be stopped and removed permanently.'
-  touch $HOME/.container_remove_requested 2>/dev/null || touch /workdir/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
-  exit 0
-}
-
-container-help() {
-  echo 'Container Commands:'
-  echo "  - container-detach: Detach from the container (container keeps running)"
-  echo "  - container-stop: Stop the container (container will be stopped but not removed)"
-  echo '  - container-remove: Stop and remove the container completely'
-  echo '  - container-help: Show this help message'
-}
-
-# For legacy compatibility
-detach() { container-detach; }
-stop() { container-stop; }
-remove() { container-remove; }
-help() { container-help; }
-
-# Export all functions
-export -f container-detach container-stop container-remove container-help
-export -f detach stop remove help
-
-# Show a welcome message
-echo "Welcome to the Yocto Container!"
-echo "Container commands available:"
-echo "  - container-help: Show all available commands"
-echo "  - container-detach: Detach from container (keeps running)"
-echo "  - container-stop: Stop the container"
-echo "  - container-remove: Stop and remove the container"
-echo ""
-
-# Run the container-help command if it's available
-if command -v container-help >/dev/null 2>&1; then
-  container-help
-else
-  echo "Warning: container commands not in PATH. You can run them directly:"
-  echo "  - /tmp/.container_commands/container-help"
-  echo "  - /tmp/.container_commands/container-detach"
-  echo "  - /tmp/.container_commands/container-stop"
-  echo "  - /tmp/.container_commands/container-remove"
+# Set proper prompt
+if [ -n \"\$BASH_VERSION\" ]; then
+    export PS1=\"\\[\\033[01;32m\\]\\u@\\[\\033[00m\\]\\[\\033[01;33m\\](yocto)\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ \"
 fi
 
-# Start an interactive shell
-exec bash
-EOF
+# Set up convenient aliases
+alias detach='container-detach'
+alias stop='container-stop'
+alias help='container-help'
 
-chmod +x "$TMP_SCRIPT"
-docker cp "$TMP_SCRIPT" "$CONTAINER_NAME:/tmp/container-init.sh"
-docker exec -it "$CONTAINER_NAME" bash /tmp/container-init.sh
-rm -f "$TMP_SCRIPT"
-
-# Define functions - these are only used locally if the container doesn't have its own
-function container-detach() {
-  echo "Detaching from container (container keeps running)..."
-  echo "Container will continue running in the background."
-  touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
-  exit 0
+# Set up monitoring for container control commands
+monitor_container_requests() {
+    while true; do
+        if [ -f \$HOME/.container_detach_requested ] || [ -f /tmp/.container_detach_requested ]; then
+            echo 'Detach requested, exiting...'
+            rm -f \$HOME/.container_detach_requested /tmp/.container_detach_requested 2>/dev/null || true
+            exit 0
+        elif [ -f \$HOME/.container_stop_requested ] || [ -f /tmp/.container_stop_requested ]; then
+            echo 'Stop requested, exiting...'
+            rm -f \$HOME/.container_stop_requested /tmp/.container_stop_requested 2>/dev/null || true
+            exit 1
+        elif [ -f \$HOME/.container_remove_requested ] || [ -f /tmp/.container_remove_requested ]; then
+            echo 'Remove requested, exiting...'
+            rm -f \$HOME/.container_remove_requested /tmp/.container_remove_requested 2>/dev/null || true
+            exit 2
+        fi
+        sleep 0.1
+    done
 }
 
-# For backwards compatibility
-function detach() {
-  container-detach
-}
+# Start monitoring in background
+monitor_container_requests &
+MONITOR_PID=\$!
+
+# Clean up monitor on exit
+trap 'kill \$MONITOR_PID 2>/dev/null || true' EXIT
+
+echo \"Welcome to the Yocto Container!\"
+echo \"Enhanced environment with container commands available.\"
+echo \"Type 'help' or 'container-help' for available commands.\"
+echo \"\"
+
+# Start interactive bash session with login profile
+exec bash --login
+"
+
+# Handle exit codes for container management
+EXIT_CODE=$?
+case $EXIT_CODE in
+    0)
+        echo "Container detached and still running."
+        ;;
+    1)
+        echo "Stopping container $CONTAINER_NAME..."
+        docker stop "$CONTAINER_NAME" > /dev/null
+        echo "Container stopped."
+        ;;
+    2)
+        echo "Removing container $CONTAINER_NAME..."
+        docker rm -f "$CONTAINER_NAME" > /dev/null
+        echo "Container removed."
+        ;;
+    *)
+        echo "Container session ended."
+        ;;
+esac
+
+exit 0

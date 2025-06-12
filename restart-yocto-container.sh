@@ -59,14 +59,12 @@ docker rm "$CONTAINER_NAME" >/dev/null 2>&1
 echo "Creating new container with proper persistence..."
 docker run -d --privileged --network=host \
     --name "$CONTAINER_NAME" \
-    -v "$WORKSPACE_DIR:/workdir" \
-    -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
-    -v "$WORKSPACE_DIR:/home/ubuntu/yocto_ws" \
+    -v "$WORKSPACE_DIR:/workspace" \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v "$(realpath "$(dirname "$0")/run-yocto-container-entrypoint.sh"):/home/ubuntu/entrypoint.sh" \
     -e DISPLAY \
-    -e TEMPLATECONF=/workdir/meta-custom/conf/templates/default \
+    -e TEMPLATECONF=/projects/meta-custom/conf/templates/default \
     "crops/poky:$BASE_VERSION" \
     bash -c "chmod +x /home/ubuntu/entrypoint.sh && /home/ubuntu/entrypoint.sh $BASE_VERSION bash"
 

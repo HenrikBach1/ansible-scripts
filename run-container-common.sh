@@ -411,19 +411,35 @@ run_container() {
     # Fix permissions to ensure container can write to it
     chmod 777 "$WORKSPACE_DIR" || true
 
-    docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
-        $USER_OPTIONS \
-        --privileged \
-        --network=host \
-        -v "$WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws" \
-        -v "$WORKSPACE_DIR:/workspace" \
-        -v "$WORKSPACE_DIR:/projects" \
-        -v /tmp/.X11-unix:/tmp/.X11-unix \
-        -e DISPLAY \
-        $ADDITIONAL_ARGS \
-        $ENTRYPOINT_MOUNT \
-        --name "$CONTAINER_NAME" \
-        "$IMAGE_NAME" $ENTRYPOINT_ARGS $CUSTOM_CMD
+    # For Yocto containers, we mount to multiple standard paths
+    if [ "$ENV_TYPE" = "yocto" ]; then
+        docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
+            $USER_OPTIONS \
+            --privileged \
+            --network=host \
+            -v "$WORKSPACE_DIR:/workspace" \
+            -v "$WORKSPACE_DIR:/projects" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -e DISPLAY \
+            $ADDITIONAL_ARGS \
+            $ENTRYPOINT_MOUNT \
+            --name "$CONTAINER_NAME" \
+            "$IMAGE_NAME" $ENTRYPOINT_ARGS $CUSTOM_CMD
+    else
+        # For other container types, use the standard mounts
+        docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
+            $USER_OPTIONS \
+            --privileged \
+            --network=host \
+            -v "$WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws" \
+            -v "$WORKSPACE_DIR:/workspace" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -e DISPLAY \
+            $ADDITIONAL_ARGS \
+            $ENTRYPOINT_MOUNT \
+            --name "$CONTAINER_NAME" \
+            "$IMAGE_NAME" $ENTRYPOINT_ARGS $CUSTOM_CMD
+    fi
 
     # If running in detach mode but auto-attach is true, attach to the container
     if [ "$DETACH_MODE" = true ] && [ "$AUTO_ATTACH" = true ]; then

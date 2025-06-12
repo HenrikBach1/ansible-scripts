@@ -5,14 +5,8 @@ file="run-yocto-container-entrypoint.sh"
 # Get container information
 CONTAINER_ID=$(hostname)
 
-# Try to create workspace directory - don't error if it fails
-mkdir -p /workdir 2>/dev/null || true
-mkdir -p /workspace 2>/dev/null || true
+# Try to create projects directory - don't error if it fails
 mkdir -p /projects 2>/dev/null || true
-
-# Make symlinks to ensure compatibility
-ln -sf /workdir /workspace 2>/dev/null || true
-ln -sf /workdir /projects 2>/dev/null || true
 
 # Create a separate directory for keep-alive processes that won't be mounted to host
 mkdir -p /var/lib/container-keepalive 2>/dev/null || true
@@ -21,15 +15,15 @@ mkdir -p /var/lib/container-keepalive 2>/dev/null || true
 KEEPALIVE_DIR="/var/lib/container-keepalive"
 mkdir -p $KEEPALIVE_DIR
 
-# Try to change to workspace directory, fallback to home if not possible
-if [ -d "/workdir" ] && [ -w "/workdir" ]; then
-    cd /workdir
+# Try to change to projects directory, fallback to home if not possible
+if [ -d "/projects" ] && [ -w "/projects" ]; then
+    cd /projects
 else
     # Fallback to home directory
     cd $HOME
-    echo "Warning: Could not access /workdir directory, using $HOME instead."
+    echo "Warning: Could not access /projects directory, using $HOME instead."
     # Try to create a workspace directory in the home folder
-    mkdir -p $HOME/workdir 2>/dev/null || true
+    mkdir -p $HOME/projects 2>/dev/null || true
 fi
 
 # Create container command definitions in a global bashrc file
@@ -330,3 +324,32 @@ fi
 # The trap will keep the container running
 echo "Interactive session ended, but container will keep running in the background."
 echo "To reconnect: docker attach yocto_container"
+
+# Ensure bash is used as default shell for all users
+if [ -f /etc/passwd ]; then
+    # This will only succeed if we're running as root
+    sed -i 's|/bin/sh$|/bin/bash|g' /etc/passwd 2>/dev/null || true
+fi
+
+# Create a profile script to set proper prompt and PATH
+mkdir -p /etc/profile.d 2>/dev/null || true
+cat > /tmp/container-setup.sh << 'EOF'
+#!/bin/bash
+# Add container commands to PATH
+export PATH="/tmp/.container_commands:$PATH"
+export PATH="$HOME/bin:$PATH"
+
+# Set a proper prompt that shows we're in a Yocto container
+export PS1="\[\033[01;32m\]\u@\[\033[00m\]\[\033[01;33m\](yocto)\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ "
+EOF
+
+# Try to move to profile.d (only succeeds if run as root)
+cp /tmp/container-setup.sh /etc/profile.d/container-setup.sh 2>/dev/null || true
+chmod +x /etc/profile.d/container-setup.sh 2>/dev/null || true
+
+# Add to system bashrc for all users
+if [ -f /etc/bash.bashrc ] && [ -w /etc/bash.bashrc ]; then
+    if ! grep -q 'container-setup.sh' /etc/bash.bashrc; then
+        echo '[ -f /tmp/container-setup.sh ] && . /tmp/container-setup.sh' >> /etc/bash.bashrc
+    fi
+fi
