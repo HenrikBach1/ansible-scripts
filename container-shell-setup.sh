@@ -29,16 +29,43 @@ fi
 echo "Setting up container environment and commands..."
 
 # Fix workspace permissions for current user in CROPS containers
-if [ "$IS_CROPS_CONTAINER" = true ] && [ "$RUNNING_AS_ROOT" = false ]; then
+if [ "$IS_CROPS_CONTAINER" = true ]; then
     echo "Fixing workspace permissions for current user..."
-    # Try to fix permissions on common workspace paths
-    for workspace_path in /workspace /projects /workdir; do
-        if [ -d "$workspace_path" ] && [ -w "$workspace_path" ]; then
-            # Fix permissions to allow current user to work with existing files
-            find "$workspace_path" -type d -exec chmod g+w {} + 2>/dev/null || true
-            find "$workspace_path" -type f -exec chmod g+w {} + 2>/dev/null || true
+    
+    # If running as root, add the target user to pokyuser group
+    if [ "$RUNNING_AS_ROOT" = true ]; then
+        # Find the actual user that will be using the container
+        target_user="usersetup"  # Default CROPS user
+        if getent group pokyuser >/dev/null 2>&1; then
+            if ! groups "$target_user" 2>/dev/null | grep -q pokyuser; then
+                echo "Adding $target_user to pokyuser group..."
+                usermod -a -G pokyuser "$target_user" 2>/dev/null || {
+                    echo "Warning: Could not add user to pokyuser group"
+                }
+            fi
         fi
-    done
+        
+        # Change ownership of workspace files to be accessible
+        for workspace_path in /workspace /projects /workdir; do
+            if [ -d "$workspace_path" ]; then
+                echo "Fixing ownership and permissions in $workspace_path..."
+                # Change ownership to usersetup:pokyuser so usersetup can write
+                find "$workspace_path" -exec chown usersetup:pokyuser {} + 2>/dev/null || true
+                # Make sure directories are writable by owner and group
+                find "$workspace_path" -type d -exec chmod 775 {} + 2>/dev/null || true
+                find "$workspace_path" -type f -exec chmod 664 {} + 2>/dev/null || true
+            fi
+        done
+    elif [ "$RUNNING_AS_ROOT" = false ]; then
+        # Running as regular user - try to fix what we can
+        for workspace_path in /workspace /projects /workdir; do
+            if [ -d "$workspace_path" ] && [ -w "$workspace_path" ]; then
+                # Fix permissions to allow current user to work with existing files
+                find "$workspace_path" -type d -exec chmod g+w {} + 2>/dev/null || true
+                find "$workspace_path" -type f -exec chmod g+w {} + 2>/dev/null || true
+            fi
+        done
+    fi
 fi
 
 # Define directories
