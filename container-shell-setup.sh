@@ -54,6 +54,10 @@ if [ "$IS_CROPS_CONTAINER" = true ]; then
                 # Make sure directories are writable by owner and group
                 find "$workspace_path" -type d -exec chmod 775 {} + 2>/dev/null || true
                 find "$workspace_path" -type f -exec chmod 664 {} + 2>/dev/null || true
+                # Make script files executable (common script extensions and shebangs)
+                find "$workspace_path" -type f \( -name "*.sh" -o -name "*.py" -o -name "*.pl" -o -name "*-env" \) -exec chmod 775 {} + 2>/dev/null || true
+                # Also make files with shebang executable
+                find "$workspace_path" -type f -exec grep -l "^#!" {} + 2>/dev/null | xargs chmod 775 2>/dev/null || true
             fi
         done
     elif [ "$RUNNING_AS_ROOT" = false ]; then
