@@ -42,7 +42,7 @@ show_ros2_help() {
     echo "  -r, --root             Run container as root user instead of current user"
     echo "  -D, --detach           Run container in detached mode (enabled by default)"
     echo "  --attach               Automatically attach to container after starting"
-    echo "  --clean                Stop and remove existing container before starting"
+    echo "  --restart              Stop and remove existing container before starting"
     echo "  --save-config          Save current configuration for future use"
     echo "  --list-configs         List all saved container configurations"
     echo "  --show-config NAME     Show detailed configuration for a specific container"
@@ -67,8 +67,8 @@ show_ros2_help() {
     echo "  # Run in attached mode (interactive session)"
     echo "  $0 --attach"
     echo ""
-    echo "  # Clean start (stop and remove existing container first)"
-    echo "  $0 --clean"
+    echo "  # Restart container (stop and remove existing container first)"
+    echo "  $0 --restart"
     echo ""
     echo "  # Save current configuration for future use"
     echo "  $0 --save-config"
@@ -233,7 +233,7 @@ while [[ $# -gt 0 ]]; do
             AUTO_ATTACH=false
             shift
             ;;
-        --clean)
+        --restart)
             CLEAN_START=true
             shift
             ;;
