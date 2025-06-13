@@ -123,7 +123,7 @@ The system provides keyboard shortcuts for quickly detaching from containers:
 - `Ctrl+X` followed by `q`: Direct detach (bypasses container-detach command)
 - `Ctrl+D`: Exit the shell (which also detaches if you're in a container session)
 
-These shortcuts are enabled when the container-commands-completion.sh script is sourced. If keyboard shortcuts don't work, you can always manually run the `container-detach` command.
+These shortcuts are automatically enabled inside containers when you connect to them. If keyboard shortcuts don't work, you can always manually run the `container-detach` command.
 
 > **Note:** For detaching to work properly, the container watcher script must be monitoring for the marker files in all possible locations: $HOME/.container_detach_requested, /workdir/.container_detach_requested, and /tmp/.container_detach_requested.
 
@@ -190,6 +190,17 @@ The `start-ros2-container.sh` and `start-yocto-container.sh` scripts provide dir
 ```
 
 **Note**: The `--restart` option is equivalent to `--clean` - it stops and removes the existing container, then creates a new one with the current configuration. This ensures a completely fresh container setup.
+
+### Fixing Missing `/projects` Directory
+
+If you have containers created with older scripts that are missing the `/projects` mount, use the `--restart` option:
+
+```bash
+./start-ros2-container.sh --restart [container_name]
+./start-yocto-container.sh --restart [container_name]
+```
+
+This recreates the container with all proper volume mounts, including the `/projects` directory that VS Code requires for proper file access.
 
 If no container name is provided, these commands operate on the default container (`ros2_container` or `yocto_container`).
 
@@ -587,22 +598,30 @@ This script:
 
 This is the easiest way to recover from container issues when other methods fail.
 
-### Complete Container Fix Script
+### Container Fix Options
 
-If you're experiencing persistent issues with ROS2 containers, we've created a comprehensive fix script that addresses common problems:
+If you're experiencing persistent issues with containers, use the built-in fix functionality:
 
 ```bash
-./fix-ros2-container.sh [--name container_name]
+./start-ros2-container.sh --fix [container_name]
+./start-yocto-container.sh --fix [container_name]
 ```
 
-This script will:
-1. Check if the container exists and create it if needed
+This will fix containers that keep exiting by adding keep-alive processes.
+
+For complete container recreation when other fixes fail:
+
+```bash
+./recreate-ros2-container.sh [--name container_name]
+```
+
+This approach will:
+1. Check if the container exists and recreate it if needed
 2. Fix workspace directory issues (creating missing directories and fixing permissions)
 3. Ensure all keep-alive processes are running properly
-4. Start the container watcher
-5. Fall back to complete recreation if other fixes fail
+4. Use saved configurations for consistent recreation
 
-This is the most thorough way to fix container issues and should resolve most problems you might encounter with ROS2 containers, including:
+This should resolve most problems you might encounter with containers, including:
 - Containers that exit immediately after starting
 - Workspace directory not found errors
 - Missing keep-alive processes
@@ -663,19 +682,15 @@ This is the most reliable way to create a container that will stay running and b
 
 To enhance usability, we provide a bash completion script for container commands. This allows you to use the `Tab` key to auto-complete container names and commands.
 
-### Installation
+### Automatic Setup
 
-Source the completion script in your `.bashrc` or run it before using container commands:
+Tab completion is automatically enabled when you use the container scripts. The completion functionality is built into the main scripts and provides completion for:
 
-```bash
-source ./container-commands-completion.sh
-```
+- Container names for all container management commands
+- Command options (--name, --workspace, --distro, --gpu, etc.)
+- Container operations inside containers (help, detach, stop, remove)
 
-To make the completion permanent, add it to your `.bashrc`:
-
-```bash
-echo "source $(pwd)/container-commands-completion.sh" >> ~/.bashrc
-```
+No additional setup is required - tab completion works automatically when you run the container scripts.
 
 ### Supported Commands
 
@@ -1149,9 +1164,29 @@ To verify container configurations, use the built-in verification commands:
 ```
 
 ### Deprecated Scripts Removed:
-- `fix-yocto-container-volumes.sh` - **REMOVED**: Redundant with `start-yocto-container.sh --restart`
+- `container-commands-completion.sh` - **REMOVED**: Functionality integrated into main scripts
+  - Functionality: Standalone bash tab completion for container commands
+  - Replacement: Tab completion is now built into `run-container-common.sh` and `container-shell-setup.sh`
+  - Reason: Eliminates need for separate script, completion works automatically
+
+- `fix-projects-path.sh` - **REMOVED**: Redundant with `start-*-container.sh --restart`
+  - Functionality: Interactive container recreation for missing `/projects` mount
+  - Replacement: Use `./start-ros2-container.sh --restart` or `./start-yocto-container.sh --restart`
+  - Reason: Simple wrapper around functionality already available in main scripts
+
+- `fix-ros2-container.sh` - **REMOVED**: Redundant with `start-ros2-container.sh --fix`
+  - Functionality: Complex container fixing with recreation fallback
+  - Replacement: Use `./start-ros2-container.sh --fix` for quick fixes or `./recreate-ros2-container.sh` for full recreation
+  - Reason: Duplicated functionality already available in main scripts
+
+- `fix-ros2-container-volumes.sh` - **REMOVED**: Redundant with `start-ros2-container.sh --clean`
+  - Functionality: Volume mount fixes by recreating containers
+  - Replacement: Use `./start-ros2-container.sh --clean` or `./recreate-ros2-container.sh`
+  - Reason: Duplicated container recreation functionality
+
+- `fix-yocto-container-volumes.sh` - **REMOVED**: Redundant with `start-yocto-container.sh --clean`
   - Functionality: Volume mount fixes for existing containers
-  - Replacement: Use `./start-yocto-container.sh --restart` or `--clean`
+  - Replacement: Use `./start-yocto-container.sh --clean` or `--restart`
   - Reason: Duplicated functionality already handled by main container script
 
 - `yocto-container-bashrc.sh` - **REMOVED**: Never actually sourced and redundant

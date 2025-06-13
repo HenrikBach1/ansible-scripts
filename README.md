@@ -107,19 +107,15 @@ By default, all containers are set up to be discoverable by VS Code's Remote - C
 
 ## Command Completions
 
-To enhance productivity when working with containers, we've provided bash completion for container commands:
+Tab completion for container commands is automatically enabled when you use the container scripts. The completion functionality is built into the main scripts and provides:
 
-```bash
-# Enable command completion
-source ./container-commands-completion.sh
-```
+- Container name completion for all container management commands
+- Command option completion (--name, --workspace, --distro, etc.)
+- Keyboard shortcuts inside containers (Ctrl+X+d to detach, Ctrl+\ for quick detach)
 
-This adds tab-completion for:
-- Container names in all container management scripts
-- Command options like `--name`, `--help`
-- Container operations like `help`, `detach`, `stop`
+No additional setup is required - tab completion works automatically when you run the container scripts.
 
-For more details, see the [Bash Completion section in CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
+For more details, see the [Container Commands documentation](CONTAINER_COMMANDS.md).
 
 ## ROS2 Development Environment
 

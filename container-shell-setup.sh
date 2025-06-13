@@ -285,6 +285,46 @@ fi
 echo "Container environment setup completed!"
 echo "Commands available: container-help, container-detach, container-stop, container-remove"
 echo "Aliases available: help, detach, stop"
+
+# Setup tab completion for container commands
+setup_container_completion() {
+    # Only setup completion if bash-completion is available and we're in an interactive shell
+    if [ -n "$BASH_VERSION" ] && [ -t 0 ] && [ -t 1 ]; then
+        # Tab completion for container commands
+        _container_commands_completion() {
+            local curr_arg="${COMP_WORDS[COMP_CWORD]}"
+            # Complete with available container commands
+            COMPREPLY=( $(compgen -W "container-detach container-stop container-remove container-help detach stop remove help" -- $curr_arg) )
+        }
+        
+        # Register completions for container commands
+        complete -F _container_commands_completion container-detach 2>/dev/null || true
+        complete -F _container_commands_completion container-stop 2>/dev/null || true
+        complete -F _container_commands_completion container-remove 2>/dev/null || true
+        complete -F _container_commands_completion container-help 2>/dev/null || true
+        complete -F _container_commands_completion detach 2>/dev/null || true
+        complete -F _container_commands_completion stop 2>/dev/null || true
+        complete -F _container_commands_completion remove 2>/dev/null || true
+        complete -F _container_commands_completion help 2>/dev/null || true
+        
+        # Setup keyboard shortcuts for container operations
+        if [[ "$TERM" != "" ]]; then
+            # Setup Ctrl+X then d to detach from containers
+            bind '"\C-xd": "container-detach\n"' 2>/dev/null || true
+            # Also provide a simpler Ctrl+\ shortcut
+            bind '"\C-\\": "container-detach\n"' 2>/dev/null || true
+            # Direct detach command using touch marker file
+            bind '"\C-xq": "touch $HOME/.container_detach_requested 2>/dev/null || touch /workdir/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested; exit\n"' 2>/dev/null || true
+        fi
+        
+        echo "Tab completion and keyboard shortcuts enabled for container commands"
+        echo "Keyboard shortcuts: Ctrl+X+d or Ctrl+\ to detach, Ctrl+X+q for direct exit"
+    fi
+}
+
+# Setup completion
+setup_container_completion
+
 echo ""
 
 # Show welcome message for interactive shells

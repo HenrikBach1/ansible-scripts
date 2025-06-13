@@ -7,6 +7,55 @@ file=run-container-common.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/container-config.sh"
 
+# Setup tab completion for container management commands
+# This provides tab completion for container names and command options
+_setup_container_completion() {
+    # Complete container names for container management commands
+    _container_management_completion() {
+        local curr_arg="${COMP_WORDS[COMP_CWORD]}"
+        
+        # Handle both arguments and options
+        if [[ ${curr_arg} == -* ]]; then
+            # Complete with common options
+            COMPREPLY=( $(compgen -W "--name --help --workspace --distro --gpu --restart --stop --remove --verify --fix --attach --clean --save-config --list-configs --show-config --show-running --remove-config --cleanup-configs" -- $curr_arg) )
+        elif [ ${COMP_CWORD} -gt 1 ] && [ "${COMP_WORDS[COMP_CWORD-1]}" == "--name" ]; then
+            # If previous arg was --name, complete with container names
+            COMPREPLY=( $(compgen -W "$(docker ps -a --format '{{.Names}}' 2>/dev/null || echo '')" -- $curr_arg) )
+        else
+            # Complete with container names for first argument
+            COMPREPLY=( $(compgen -W "$(docker ps -a --format '{{.Names}}' 2>/dev/null || echo '')" -- $curr_arg) )
+        fi
+    }
+    
+    # Complete container names for simple scripts
+    _container_names_completion() {
+        local curr_arg="${COMP_WORDS[COMP_CWORD]}"
+        COMPREPLY=( $(compgen -W "$(docker ps --format '{{.Names}}' 2>/dev/null || echo '')" -- $curr_arg) )
+    }
+    
+    # Only set up completion if we're in an interactive shell and have the complete command
+    if [[ $- == *i* ]] && command -v complete >/dev/null 2>&1; then
+        # Main container management scripts
+        complete -F _container_management_completion start-ros2-container.sh 2>/dev/null || true
+        complete -F _container_management_completion start-yocto-container.sh 2>/dev/null || true
+        complete -F _container_management_completion restart-ros2-container.sh 2>/dev/null || true
+        complete -F _container_management_completion restart-yocto-container.sh 2>/dev/null || true
+        complete -F _container_management_completion restart-vscode-container.sh 2>/dev/null || true
+        complete -F _container_management_completion recreate-ros2-container.sh 2>/dev/null || true
+        
+        # Container connection scripts
+        complete -F _container_names_completion ros2-connect 2>/dev/null || true
+        complete -F _container_names_completion yocto-connect 2>/dev/null || true
+        
+        # Docker exec wrappers if they exist
+        complete -F _container_names_completion docker-exec-it 2>/dev/null || true
+        complete -F _container_names_completion docker-exec-detached 2>/dev/null || true
+    fi
+}
+
+# Setup completion when this script is sourced
+_setup_container_completion
+
 # Function to fix a container that keeps exiting
 fix_container_exit() {
     local CONTAINER_NAME="$1"

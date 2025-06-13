@@ -120,19 +120,26 @@ These multiple mounts ensure maximum compatibility with different tools and work
 
 ### Fixing Missing Volume Mounts
 
-If you have existing containers created with older scripts that are missing the `/projects` mount, you have two options:
+If you have existing containers created with older scripts that are missing the `/projects` mount, you can recreate them with proper mounts:
 
-### Option 1: Use the fix-projects-path.sh script (Recommended)
+### Recreate Container with Proper Mounts
 
-We provide a helper script that will stop, remove, and recreate your container with the correct mounts:
+Use the restart option to stop, remove, and recreate your container with the correct mounts:
 
 ```bash
-./fix-projects-path.sh your_container_name
+./start-ros2-container.sh --restart [container_name]
+./start-yocto-container.sh --restart [container_name]
 ```
 
-### Option 2: Manually recreate the container
+**What this does:**
+- Stops the existing container
+- Removes the container completely
+- Creates a new container with all proper volume mounts (including `/projects`)
+- Preserves any saved configuration settings
 
-If you prefer to do it manually:
+### Alternative: Manual Recreation
+
+If you prefer to do it step by step:
 
 1. Stop the container: `docker stop your_container_name`
 2. Remove the container: `docker rm your_container_name`
@@ -157,7 +164,14 @@ The most common issue with VS Code Remote Development is a missing `/projects` d
 1. The container was created with an older version of the scripts
 2. The container was created manually without the correct volume mounts
 
-**Solution:** Use the `fix-projects-path.sh` script or manually recreate the container.
+**Solution:** Use the restart option to recreate the container with proper mounts:
+
+```bash
+./start-ros2-container.sh --restart [container_name]
+./start-yocto-container.sh --restart [container_name]
+```
+
+This will recreate your container with all the necessary volume mounts including `/projects`.
 
 ```bash
 ./cleanup-container-images.sh
@@ -289,9 +303,18 @@ After running the script, follow the standard connection steps above.
 
 For more detailed information about container lifecycle, detached commands, and troubleshooting, see [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
 
-## Quick Recovery with recreate-ros2-container.sh
+## Quick Recovery with start-*-container.sh --fix
 
-If you're still having issues with VS Code attaching to the container, we've provided a simple recovery script:
+If you're having issues with VS Code attaching to containers, use the built-in fix functionality:
+
+```bash
+./start-ros2-container.sh --fix [container_name]
+./start-yocto-container.sh --fix [container_name]
+```
+
+This will fix containers that keep exiting and ensure they stay running.
+
+For complete container recreation, use:
 
 ```bash
 ./recreate-ros2-container.sh [--name container_name]
@@ -302,23 +325,29 @@ This script will:
 2. Create a fresh container using saved settings (if available)
 3. Ensure all the proper processes are running inside the container
 
-After running this script, you should be able to attach to the container from VS Code without any issues.
+After running these scripts, you should be able to attach to the container from VS Code without any issues.
 
-## Comprehensive Container Fixing
+## Alternative Troubleshooting
 
-For the most thorough container repair, we've created a comprehensive fix script:
+If you continue to have issues after using the `--fix` option, you can:
 
-```bash
-./fix-ros2-container.sh [--name container_name]
-```
+1. Use the complete recreation script for a fresh start:
+   ```bash
+   ./recreate-ros2-container.sh [--name container_name]
+   ```
 
-This script performs a complete check and repair of your container, fixing:
-- Workspace directory issues
-- Keep-alive process problems
-- Permission errors
-- Container lifecycle management
+2. For missing `/projects` directory issues, recreate the container:
+   ```bash
+   ./start-ros2-container.sh --restart [container_name]
+   ./start-yocto-container.sh --restart [container_name]
+   ```
 
-If you're having persistent issues with VS Code not being able to connect to your container, run this script before trying to attach from VS Code again.
+3. Check container status and logs:
+   ```bash
+   ./start-ros2-container.sh --verify [container_name]
+   ```
+
+If you're having persistent issues with VS Code not being able to connect to your container, try these solutions in order before attempting to attach from VS Code again.
 
 ## Advanced Configuration
 
