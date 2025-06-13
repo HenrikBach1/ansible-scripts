@@ -581,12 +581,21 @@ if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then
 fi
 
 # Add container commands to the container
-if [ -f "$(dirname "$0")/add-commands-to-container-robust.sh" ]; then
-    echo "Adding container commands to $CONTAINER_NAME..."
-    # Use the unified script for all container types
-    bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME"
+if [ -f "$(dirname "$0")/container-shell-setup.sh" ]; then
+    echo "Setting up container environment for $CONTAINER_NAME..."
+    # Give the container a moment to start
+    sleep 2
     
-    # No need to add init script, as add-commands-to-container-robust.sh already handles this
+    # Copy the unified setup script to container
+    docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"
+    
+    # Run the setup script inside the container as root to ensure system-wide installation
+    docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+    
+    # Also run as regular user to set up user-specific files (.shrc, etc.)
+    docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+    
+    echo "Container environment setup completed."
 fi
 
 # If auto-attach is enabled, connect to the container

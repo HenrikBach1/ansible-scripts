@@ -18,16 +18,18 @@ if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; 
     sleep 1
 fi
 
-# Set up container environment if not already done
-# Check if commands exist, if not run setup
+# Check if container environment is set up, if not run setup
 if ! docker exec "$CONTAINER_NAME" test -f "/usr/local/bin/container-help" 2>/dev/null; then
-    echo "Setting up container environment..."
+    echo "Container environment not found, setting up..."
     
     # Copy the unified setup script to container
     docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"
     
     # Run the setup script inside the container as root to ensure system-wide installation
     docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+    
+    # Also run as regular user to set up user-specific files (.shrc, etc.)
+    docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
 else
     echo "Container environment already configured."
 fi

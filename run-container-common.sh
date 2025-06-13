@@ -477,15 +477,21 @@ run_container() {
     fi
     
     # Add container commands to the container
-    if [ -f "$(dirname "$0")/add-commands-to-container-robust.sh" ]; then
-        echo "Adding container commands to $CONTAINER_NAME..."
-        # For ROS2 containers, use ubuntu as the user
-        if [ "$ENV_TYPE" = "ros2" ]; then
-            bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME" "ubuntu"
-        else
-            # For Yocto and other containers, use the current user
-            bash "$(dirname "$0")/add-commands-to-container-robust.sh" "$CONTAINER_NAME" "$(id -un)"
-        fi
+    if [ -f "$(dirname "$0")/container-shell-setup.sh" ]; then
+        echo "Setting up container environment for $CONTAINER_NAME..."
+        # Give the container a moment to start
+        sleep 2
+        
+        # Copy the unified setup script to container
+        docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"
+        
+        # Run the setup script inside the container as root to ensure system-wide installation
+        docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+        
+        # Also run as regular user to set up user-specific files (.shrc, etc.)
+        docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
+        
+        echo "Container environment setup completed."
     fi
 }
 
