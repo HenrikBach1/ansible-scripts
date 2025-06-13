@@ -410,6 +410,15 @@ run_container() {
     
     # Fix permissions to ensure container can write to it
     chmod 777 "$WORKSPACE_DIR" || true
+    
+    # For Yocto containers, fix permissions on existing files/directories
+    # to ensure current user can work with files created by pokyuser
+    if [ "$ENV_TYPE" = "yocto" ] && [ "$RUN_AS_ROOT" = false ]; then
+        echo "Fixing workspace permissions for Yocto container..."
+        # Make directories writable and files readable/writable for group and others
+        find "$WORKSPACE_DIR" -type d -exec chmod 775 {} + 2>/dev/null || true
+        find "$WORKSPACE_DIR" -type f -exec chmod 664 {} + 2>/dev/null || true
+    fi
 
     # Mount workspace to all standard paths for maximum compatibility
     WORKSPACE_MOUNTS="-v $WORKSPACE_DIR:/workspace -v $WORKSPACE_DIR:/projects"

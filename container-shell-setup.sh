@@ -28,6 +28,19 @@ fi
 
 echo "Setting up container environment and commands..."
 
+# Fix workspace permissions for current user in CROPS containers
+if [ "$IS_CROPS_CONTAINER" = true ] && [ "$RUNNING_AS_ROOT" = false ]; then
+    echo "Fixing workspace permissions for current user..."
+    # Try to fix permissions on common workspace paths
+    for workspace_path in /workspace /projects /workdir; do
+        if [ -d "$workspace_path" ] && [ -w "$workspace_path" ]; then
+            # Fix permissions to allow current user to work with existing files
+            find "$workspace_path" -type d -exec chmod g+w {} + 2>/dev/null || true
+            find "$workspace_path" -type f -exec chmod g+w {} + 2>/dev/null || true
+        fi
+    done
+fi
+
 # Define directories
 USER_BIN="$HOME/bin"
 TMP_BIN="/tmp/.container_commands"
