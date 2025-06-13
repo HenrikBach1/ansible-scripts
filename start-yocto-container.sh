@@ -524,7 +524,35 @@ if [ -d "$WORKSPACE_DIR" ]; then
     fi
 fi
 
-# Run the container with a modified command that ensures it stays alive
+# Create a startup script for the container
+cat > /tmp/yocto-container-startup.sh << 'EOF'
+#!/bin/bash
+cd /workdir || cd /
+echo "Yocto Development Environment"
+echo "-------------------------"
+echo ""
+echo "This is a CROPS/poky build environment container for Yocto development."
+echo "It provides the tools needed to build Yocto but does not include Poky source code."
+echo ""
+echo "To get started:"
+echo "1. Clone Poky with your desired version:"
+echo "   git clone -b <branch-name> git://git.yoctoproject.org/poky"
+echo "   (Examples: scarthgap, kirkstone, langdale, etc.)"
+echo "2. Initialize: source poky/oe-init-build-env"
+echo "3. Build: bitbake core-image-minimal"
+echo ""
+echo "Container is now running and ready for development."
+echo "Use 'docker exec -it $CONTAINER_NAME bash' to connect."
+echo ""
+# Keep the container running with a simple approach
+exec tail -f /dev/null
+EOF
+
+# Get current user and group IDs for CROPS container
+USER_ID=$(id -u)
+GROUP_ID=$(id -g)
+
+# Run the container with CROPS-specific parameters
 docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     --privileged \
     --network=host \
@@ -535,39 +563,10 @@ docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     -e DISPLAY \
     $ADDITIONAL_ARGS \
     --name "$CONTAINER_NAME" \
-    "$IMAGE_NAME" --workdir=/workdir \
-    bash -c 'cd /workdir && \
-             echo "Yocto Development Environment" && \
-             echo "-------------------------" && \
-             echo "Container Base Image: '"$IMAGE_NAME"'" && \
-             echo "" && \
-             echo "This is a CROPS/poky build environment container for Yocto development." && \
-             echo "It provides the tools needed to build Yocto but does not include Poky source code." && \
-             echo "" && \
-             echo "To get started:" && \
-             echo "1. Clone Poky with your desired version:" && \
-             echo "   git clone -b <branch-name> git://git.yoctoproject.org/poky" && \
-             echo "   (Examples: scarthgap, kirkstone, langdale, etc.)" && \
-             echo "2. Initialize: source poky/oe-init-build-env" && \
-             echo "3. Build: bitbake core-image-minimal" && \
-             echo "" && \
-             echo "4. Enter the environment: ./start-yocto-container.sh --name <container-name> --workspace <workspace-dir>" && \
-             echo "" && \
-             # First, find where we can write files
-             echo "Setting up keep-alive processes..." && \
-             mkdir -p /tmp/container_keepalive && \
-             chmod 777 /tmp/container_keepalive && \
-             # Create and run a robust keep-alive process
-             echo "#!/bin/bash" > /tmp/container_keepalive/keep_alive.sh && \
-             echo "trap \"echo Keeping container alive; exec tail -f /dev/null\" EXIT" >> /tmp/container_keepalive/keep_alive.sh && \
-             echo "exec tail -f /dev/null" >> /tmp/container_keepalive/keep_alive.sh && \
-             chmod +x /tmp/container_keepalive/keep_alive.sh && \
-             echo "Starting keep-alive process to ensure container stays running..." && \
-             nohup bash -c "while true; do sleep 3600; done" >/dev/null 2>&1 & \
-             # Create a second keep-alive process as a backup
-             nohup bash -c "exec tail -f /dev/null" >/dev/null 2>&1 & \
-             # Use the direct command as the main process
-             exec tail -f /dev/null'
+    "$IMAGE_NAME" \
+    --workdir=/workdir \
+    --id=$USER_ID:$GROUP_ID \
+    bash -c 'echo "Yocto Development Environment"; echo "-------------------------"; echo "This is a CROPS/poky build environment container for Yocto development."; echo "Container is ready for development."; exec tail -f /dev/null'
 
 # Start the container watcher in the background if this is a persistent container
 if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then
@@ -578,19 +577,43 @@ fi
 # Add container commands to the container
 if [ -f "$(dirname "$0")/container-shell-setup.sh" ]; then
     echo "Setting up container environment for $CONTAINER_NAME..."
-    # Give the container a moment to start
-    sleep 2
+    # Give the container a moment to start and verify it's running
+    sleep 3
     
-    # Copy the unified setup script to container
-    docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"
-    
-    # Run the setup script inside the container as root to ensure system-wide installation
-    docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
-    
-    # Also run as regular user to set up user-specific files (.shrc, etc.)
-    docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh
-    
-    echo "Container environment setup completed."
+    # Check if container is actually running before trying to exec
+    if docker ps --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+        # Copy the unified setup script to container
+        if docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"; then
+            # Run the setup script inside the container as root to ensure system-wide installation
+            docker exec -u root "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh 2>/dev/null || {
+                echo "Warning: Failed to run setup script as root, trying as regular user"
+            }
+            
+            # Also run as regular user to set up user-specific files (.shrc, etc.)
+            docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh 2>/dev/null || {
+                echo "Warning: Failed to run setup script as regular user"
+            }
+            
+            echo "Container environment setup completed."
+        else
+            echo "Warning: Failed to copy setup script to container"
+        fi
+    else
+        echo "Warning: Container $CONTAINER_NAME is not running, skipping environment setup"
+        # Try to start the container if it's not running
+        echo "Attempting to start container..."
+        if docker start "$CONTAINER_NAME" >/dev/null 2>&1; then
+            echo "Container started successfully"
+            sleep 2
+            # Retry the setup
+            if docker cp "$(dirname "$0")/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/container-shell-setup.sh"; then
+                docker exec "$CONTAINER_NAME" bash /tmp/container-shell-setup.sh 2>/dev/null || true
+                echo "Container environment setup completed after restart."
+            fi
+        else
+            echo "Error: Could not start container $CONTAINER_NAME"
+        fi
+    fi
 fi
 
 # If auto-attach is enabled, connect to the container
