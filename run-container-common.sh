@@ -411,14 +411,22 @@ run_container() {
     # Fix permissions to ensure container can write to it
     chmod 777 "$WORKSPACE_DIR" || true
 
-    # For Yocto containers, we mount to multiple standard paths
+    # Mount workspace to all standard paths for maximum compatibility
+    WORKSPACE_MOUNTS="-v $WORKSPACE_DIR:/workspace -v $WORKSPACE_DIR:/projects"
+    
+    # Add container-specific workspace path for non-Yocto containers
+    if [ "$ENV_TYPE" != "yocto" ]; then
+        WORKSPACE_MOUNTS="$WORKSPACE_MOUNTS -v $WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws"
+    fi
+
+    # For Yocto containers, we also need the /workdir mount for CROPS compatibility
     if [ "$ENV_TYPE" = "yocto" ]; then
+        WORKSPACE_MOUNTS="$WORKSPACE_MOUNTS -v $WORKSPACE_DIR:/workdir"
         docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
             $USER_OPTIONS \
             --privileged \
             --network=host \
-            -v "$WORKSPACE_DIR:/workspace" \
-            -v "$WORKSPACE_DIR:/projects" \
+            $WORKSPACE_MOUNTS \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -e DISPLAY \
             $ADDITIONAL_ARGS \
@@ -431,8 +439,7 @@ run_container() {
             $USER_OPTIONS \
             --privileged \
             --network=host \
-            -v "$WORKSPACE_DIR:/home/$(id -u)/${ENV_TYPE}_ws" \
-            -v "$WORKSPACE_DIR:/workspace" \
+            $WORKSPACE_MOUNTS \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -e DISPLAY \
             $ADDITIONAL_ARGS \
