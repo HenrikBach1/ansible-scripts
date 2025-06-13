@@ -387,6 +387,10 @@ run_container() {
     DETACH_FLAG=""
     if [ "$DETACH_MODE" = true ]; then
         DETACH_FLAG="-d"
+        # For detached mode, ensure we have a keep-alive command
+        if [ "$CUSTOM_CMD" = "bash" ]; then
+            CUSTOM_CMD="bash -c 'trap \"exit 0\" TERM; while true; do sleep 1; done'"
+        fi
     fi
 
     # Entrypoint command
