@@ -336,7 +336,7 @@ fi
 # CROPS/poky requires special handling - override the common container options
 # to use the crops/poky-specific flags
 USER_OPTIONS="--workdir=/workdir"
-ADDITIONAL_ARGS="-e TEMPLATECONF=/workdir/meta-custom/conf/templates/default"
+ADDITIONAL_ARGS=""  # Clear additional args - let CROPS handle defaults
 ENTRYPOINT_SCRIPT="" # Don't use our custom entrypoint for CROPS
 ENTRYPOINT_MOUNT="" # Clear any mounts that were set
 ENTRYPOINT_ARGS="" # Clear any args that were set

@@ -28,7 +28,7 @@ This repository provides scripts for two types of development containers:
 
 ### Robust Container Scripts
 For more reliable container lifecycle management, especially when using detached commands or VS Code:
-- `robust-ros2-container.sh`: Creates robust ROS2 containers with reliable keep-alive processes
+- `start-ros2-container.sh`: Creates and manages ROS2 containers with reliable keep-alive processes
 - `robust-yocto-container.sh`: Creates robust Yocto containers with reliable keep-alive processes
 
 The robust scripts are recommended for environments where you need maximum stability with VSCode remote development.
@@ -61,7 +61,6 @@ These features are implemented through a shared script (`run-container-common.sh
 - `ensure-yocto-container-commands.sh`: Specialized script for ensuring container commands are properly installed in Yocto containers (uses the same shared library)
 - `container-watch.sh`: Background process that monitors containers and handles detach/stop/remove requests
 - `verify-container.sh`: Quick verification tool to check if a container's commands and workspace paths are properly configured
-- `maintain-container-scripts.sh`: Maintenance tool for cleaning up temporary files and verifying container configurations
 
 > **Note on Command Installation**: Both command installation scripts now use a shared library (`container-command-common.sh`) with consistent behavior. Use `add-commands-to-container.sh` for most containers and `ensure-yocto-container-commands.sh` for specialized Yocto container setups requiring extra reliability.
 
@@ -348,16 +347,16 @@ For development environments that require maximum stability, especially when wor
 
 ```bash
 # Create a robust ROS2 container with default settings
-./robust-ros2-container.sh
+./start-ros2-container.sh
 
 # Create a container with custom name and workspace
-./robust-ros2-container.sh --name my_ros2_dev --workspace /path/to/workspace
+./start-ros2-container.sh --name my_ros2_dev --workspace /path/to/workspace
 
 # Create a container with specific ROS2 distribution
-./robust-ros2-container.sh --name humble_dev --distro humble
+./start-ros2-container.sh --name humble_dev --distro humble
 
 # Fix an existing container that might have issues
-./robust-ros2-container.sh --name my_ros2_dev --fix
+./start-ros2-container.sh --name my_ros2_dev --fix
 ```
 
 ### Creating Robust Yocto Containers
@@ -423,19 +422,18 @@ If you encounter issues with workspace paths (especially in Yocto containers):
    ./start-yocto-container.sh --name CONTAINER_NAME
    ```
 
-### Container Cleanup and Maintenance
+### Container Verification
 
-To clean up temporary files and verify container configurations:
+To verify container configurations, use the built-in verification commands:
 
 ```bash
-./maintain-container-scripts.sh
-```
+# Verify specific containers
+./start-ros2-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container.sh --verify [CONTAINER_NAME]
 
-This script will:
-- Check for running containers and verify their configurations
-- Find and remove backup files (.bak, ~, .old, .orig)
-- Remove temporary fix scripts
-- Clean up example and deprecated scripts
+# Or use the dedicated verification tool
+./verify-container.sh [CONTAINER_NAME]
+```
 
 For more detailed information about container commands, configuration, and troubleshooting, see [CONTAINER_COMMANDS.md](CONTAINER_COMMANDS.md).
 

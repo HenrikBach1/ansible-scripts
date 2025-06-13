@@ -132,17 +132,21 @@ EOF
 # Command definitions
 DETACH_CMD='echo "Detaching from container (container keeps running)..."
 echo "Container will continue running in the background."
-touch $HOME/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+# Try multiple locations to ensure the watcher finds the detach request
+touch /workdir/.container_detach_requested 2>/dev/null || touch $HOME/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+echo "Detach requested, exiting..."
 exit 0'
 
 STOP_CMD='echo "Stopping container..."
 echo "Container will be stopped but can be started again."
-touch $HOME/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
+# Try multiple locations to ensure the watcher finds the stop request
+touch /workdir/.container_stop_requested 2>/dev/null || touch $HOME/.container_stop_requested 2>/dev/null || touch /tmp/.container_stop_requested
 exit 0'
 
 REMOVE_CMD='echo "Removing container..."
 echo "Container will be stopped and removed permanently."
-touch $HOME/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
+# Try multiple locations to ensure the watcher finds the remove request
+touch /workdir/.container_remove_requested 2>/dev/null || touch $HOME/.container_remove_requested 2>/dev/null || touch /tmp/.container_remove_requested
 exit 0'
 
 HELP_CMD='echo "Container Commands:"

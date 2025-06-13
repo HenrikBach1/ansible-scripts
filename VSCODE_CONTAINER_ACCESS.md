@@ -14,7 +14,7 @@ For the most reliable VS Code remote development experience, we recommend using 
 1. Create a robust container:
    ```bash
    # For ROS2
-   ./robust-ros2-container.sh --name my_ros2_dev
+   ./start-ros2-container.sh --name my_ros2_dev
 
    # For Yocto
    ./robust-yocto-container.sh --name my_yocto_dev
@@ -348,7 +348,7 @@ The robust container scripts provide built-in fixing capabilities that can solve
 
 ```bash
 # Fix a ROS2 container
-./robust-ros2-container.sh --name my_ros2_dev --fix
+./start-ros2-container.sh --name my_ros2_dev --fix
 
 # Fix a Yocto container
 ./robust-yocto-container.sh --name my_yocto_dev --fix
@@ -368,7 +368,7 @@ If a container is completely unresponsive and can't be fixed, the easiest soluti
 # For ROS2
 docker stop my_ros2_dev
 docker rm my_ros2_dev
-./robust-ros2-container.sh --name my_ros2_dev
+./start-ros2-container.sh --name my_ros2_dev
 
 # For Yocto
 docker stop my_yocto_dev

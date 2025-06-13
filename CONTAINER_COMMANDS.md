@@ -684,7 +684,7 @@ The bash completion supports:
 - Container management scripts (`add-commands-to-container.sh`)
 - Docker exec wrappers (`docker-exec-it`, `docker-exec-detached`)
 - Container connection scripts (`ros2-connect`, `yocto-connect`)
-- Container maintenance scripts (`restart-ros2-container.sh`, `fix-container-volumes.sh`, etc.)
+- Container maintenance scripts (`restart-ros2-container.sh`, `restart-yocto-container.sh`, etc.)
 - In-container commands (`container-detach`, `container-stop`, etc.)
 
 ### Usage Examples
@@ -953,52 +953,21 @@ The container command installation scripts have been harmonized with a shared li
 
 This integration maintains backward compatibility while streamlining the codebase and making maintenance easier.
 
-## Repository Maintenance
+## Container Verification
 
-To help keep your container scripts repository clean and well-maintained, we provide a maintenance utility script:
+To verify container configurations, you can use the built-in verification features:
 
+### Individual Container Verification
+
+For ROS2 containers:
 ```bash
-./maintain-container-scripts.sh [OPTIONS]
+./start-ros2-container.sh --verify [CONTAINER_NAME]
 ```
 
-Options:
-- `--verify-only`: Only run verification checks, skip cleanup
-- `--cleanup-only`: Only perform cleanup, skip verification
-
-### What the Maintenance Script Does
-
-This script performs two main functions:
-
-1. **Verification of Container Configurations**:
-   - Detects all running containers
-   - Offers to verify their configuration 
-   - Runs the appropriate verification for each container type
-   - Provides status of container commands and workspace paths
-
-2. **Cleanup of Temporary and Obsolete Files**:
-   - Finds and removes backup files (`.bak`, `~`, `.old`, `.orig`)
-   - Cleans up temporary fix scripts while preserving core scripts
-   - Removes example scripts that are no longer needed
-   - Deletes the deprecated_scripts directory if present
-
-### Usage Examples
-
-To perform both verification and cleanup:
+For Yocto containers:
 ```bash
-./maintain-container-scripts.sh
+./start-yocto-container.sh --verify [CONTAINER_NAME]
 ```
-
-To only verify containers without cleanup:
-```bash
-./maintain-container-scripts.sh --verify-only
-```
-
-To only clean up temporary files without verification:
-```bash
-./maintain-container-scripts.sh --cleanup-only
-```
-
-This script is particularly useful after you've been making fixes or updates to your container setup, as it helps ensure everything is configured correctly and removes any temporary files created during the process.
 
 ### Quick Verification Tool
 
@@ -1164,19 +1133,20 @@ docker exec yocto_container sh -l -c "container-help"
 ./yocto-connect  # Should show enhanced prompt and available commands
 ```
 
-### Maintenance and Cleanup
+### Container Verification
 
-To clean up temporary files and verify container configurations, use the maintenance script:
+To verify container configurations, use the built-in verification commands:
 
 ```bash
-./maintain-container-scripts.sh
-```
+# Verify ROS2 containers
+./start-ros2-container.sh --verify [CONTAINER_NAME]
 
-This script will:
-- Check for running containers and verify their configurations
-- Find and remove backup files (.bak, ~, .old, .orig)
-- Remove temporary fix scripts
-- Clean up example and deprecated scripts
+# Verify Yocto containers  
+./start-yocto-container.sh --verify [CONTAINER_NAME]
+
+# Or use the standalone verification tool
+./verify-container.sh [CONTAINER_NAME]
+```
 
 ### Deprecated Scripts Removed:
 - `fix-yocto-container-volumes.sh` - **REMOVED**: Redundant with `start-yocto-container.sh --restart`

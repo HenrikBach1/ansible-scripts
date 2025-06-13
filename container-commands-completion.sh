@@ -2,7 +2,8 @@
 # container-commands-completion.sh
 # Bash completion for container management commands
 
-# Complete container names for docker and container command scripts
+complete -F _container_management_completion start-ros2-container.sh
+complete -F _container_management_completion start-yocto-container.shomplete container names for docker and container command scripts
 _container_names_completion() {
     local curr_arg;
     curr_arg="${COMP_WORDS[COMP_CWORD]}"
@@ -98,9 +99,8 @@ complete -F _container_management_completion restart-yocto-container.sh
 complete -F _container_management_completion restart-vscode-container.sh
 complete -F _container_management_completion fix-ros2-container.sh
 complete -F _container_management_completion fix-yocto-container.sh
-complete -F _container_management_completion fix-container-volumes.sh
 complete -F _container_management_completion recreate-ros2-container.sh
-complete -F _container_management_completion robust-ros2-container.sh
+complete -F _container_management_completion start-ros2-container.sh
 complete -F _container_management_completion robust-yocto-container.sh
 
 # In-container completion (won't be used on host, but included for completeness)
