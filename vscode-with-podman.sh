@@ -29,7 +29,7 @@ echo "🚀 Launching VS Code..."
 
 # Launch VS Code with the workspace or current directory
 if [ $# -gt 0 ]; then
-    exec code "$1"
+    exec code-insiders "$1"
 else
-    exec code .
+    exec code-insiders .
 fi
