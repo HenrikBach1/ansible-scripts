@@ -36,26 +36,16 @@ Complete ROS2 development environment setup using Podman.
 
 ## Container Management Scripts
 
-### `start-yocto-container-podman.sh`
+### `start-yocto-container-podman.sh` ✅ **Recommended**
 Main script for creating and managing Yocto containers with Podman.
+- **Auto-installs Podman** if not available using `podman-install.yml`
 - Creates CROPS/poky-based containers
 - Mounts workspace directories with proper SELinux labels
 - Sets up environment variables for Yocto development
-- Uses shared runner library for consistency
-
-### `restart-yocto-container-podman.sh`
-Restarts Yocto Podman containers with proper persistence.
-- Stops and removes existing container
-- Recreates with same configuration
+- **Includes VS Code integration setup automatically**
+- Uses `--restart` option instead of separate restart script
 - Installs container commands
 - Provides container status and connection info
-
-### `restart-ros2-container-podman.sh`
-Restarts ROS2 Podman containers with proper persistence.
-- Detects ROS2 distribution automatically
-- Preserves workspace mounts
-- Sets up ROS2 environment variables
-- Creates persistent container process
 
 ## Connection Scripts
 
@@ -96,33 +86,9 @@ Specialized script for installing container commands in Podman containers.
 - Handles Podman-specific container access
 - Ensures container commands are available
 
-### `setup-vscode-podman.sh`
-Configures VS Code to work with Podman containers for Remote-Containers extension.
-- Starts and enables Podman socket service
-- Sets up DOCKER_HOST environment variable for Docker compatibility
-- Configures VS Code settings.json for Podman integration
-- Provides instructions for VS Code Remote-Containers usage
-
-**Usage:**
-```bash
-./setup-vscode-podman.sh
-```
-
-**What it does:**
-- Enables `podman.socket` systemd service for Docker API compatibility
-- Adds `DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock` to ~/.bashrc
-- Updates VS Code settings to use Podman socket
-- Configures `dev.containers.dockerPath` to use `podman`
-
-**After running this script:**
-1. Restart VS Code
-2. Install "Dev Containers" extension if not already installed
-3. Use `Ctrl+Shift+P` → "Dev Containers: Attach to Running Container..."
-4. Select your Podman container from the list
-
 ## VS Code Launcher Script
 
-### `vscode-with-podman.sh`
+### `vscode-with-podman.sh` ✅ **Recommended**
 Simple, fast VS Code launcher with Podman environment setup.
 - Quick environment setup with minimal output
 - Shows available containers and API status
@@ -136,9 +102,6 @@ Simple, fast VS Code launcher with Podman environment setup.
 
 # Launch VS Code with specific workspace
 ./vscode-with-podman.sh /path/to/workspace
-
-# Launch from project directory
-cd ~/projects && ./ansible/iac-scripts/vscode-with-podman.sh
 ```
 
 **What this script does:**
@@ -147,6 +110,8 @@ cd ~/projects && ./ansible/iac-scripts/vscode-with-podman.sh
 - Test Podman API connectivity
 - Show available containers
 - Launch VS Code with proper environment for Remote-Containers extension
+
+> **Note**: The `setup-vscode-podman.sh` script has been removed as VS Code integration is now automatically handled by the container startup scripts.
 
 ## Shared Libraries
 

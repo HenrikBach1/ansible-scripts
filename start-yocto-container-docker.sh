@@ -3,6 +3,51 @@
 file=start-yocto-container-docker.sh
 echo "Running script: $file"
 
+# Check for Ubuntu 24.04 and warn about BitBake compatibility issues
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    if [[ "$ID" == "ubuntu" && "$VERSION_ID" == "24.04" ]]; then
+        echo "⚠️  WARNING: Ubuntu 24.04 Detected ⚠️"
+        echo ""
+        echo "Ubuntu 24.04 introduces user namespace restrictions that can cause"
+        echo "BitBake builds to fail in Docker containers with errors like:"
+        echo "  - 'unable to set up user namespaces'"
+        echo "  - 'newuidmap/newgidmap permission issues'"
+        echo "  - 'pseudo: FATAL: execvp failed'"
+        echo ""
+        echo "🐋 RECOMMENDED SOLUTION: Use Podman instead of Docker"
+        echo ""
+        echo "Podman runs rootless by default and avoids these namespace conflicts."
+        echo "This repository includes equivalent Podman scripts:"
+        echo ""
+        echo "  Instead of: ./start-yocto-container-docker.sh"
+        echo "  Use:        ./start-yocto-container-podman.sh"
+        echo ""
+        echo "To install Podman and set up Yocto development:"
+        echo "  1. ansible-playbook podman-install.yml"
+        echo "  2. ansible-playbook yocto-in-podman-install.yml"
+        echo "  3. ./start-yocto-container-podman.sh"
+        echo ""
+        echo "For VS Code integration:"
+        echo "  ./setup-vscode-podman.sh"
+        echo "  ./vscode-with-podman.sh"
+        echo ""
+        read -p "Continue with Docker anyway? (not recommended) [y/N]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Exiting. Please use the Podman-based scripts for Ubuntu 24.04."
+            echo ""
+            echo "Quick setup:"
+            echo "  ansible-playbook podman-install.yml"
+            echo "  ./start-yocto-container-podman.sh"
+            exit 0
+        fi
+        echo ""
+        echo "⚠️  Proceeding with Docker (may encounter BitBake issues)..."
+        echo ""
+    fi
+fi
+
 # Store original arguments
 ORIGINAL_ARGS="$@"
 
@@ -113,8 +158,12 @@ show_yocto_help() {
     echo ""
     echo "Ubuntu 24.04+ Compatibility:"
     echo "This script includes security options to handle Ubuntu 24.04+ user namespace restrictions"
-    echo "that can affect BitBake builds. If you encounter namespace errors, the container"
-    echo "automatically includes the necessary security configurations."
+    echo "that can affect BitBake builds. If you encounter namespace errors, consider using the"
+    echo "Podman-based alternative: ./start-yocto-container-podman.sh"
+    echo ""
+    echo "For Ubuntu 24.04+, Podman is recommended over Docker for Yocto development:"
+    echo "  ./start-yocto-container-podman.sh  # Recommended for Ubuntu 24.04+"
+    echo "  ./setup-vscode-podman.sh           # For VS Code integration"
     exit 0
 }
 
@@ -246,85 +295,30 @@ for arg in "$@"; do
     fi
 done
 
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -n|--name)
-            CONTAINER_NAME="$2"
-            # Check if we have a saved configuration for this container name
-            if [ "$(container_config_exists "$CONTAINER_NAME")" = "true" ]; then
-                # Get saved config values
-                ENV_TYPE=$(load_container_config "$CONTAINER_NAME" "env_type" "$ENV_TYPE")
-                WORKSPACE_DIR=$(load_container_config "$CONTAINER_NAME" "workspace_dir" "$WORKSPACE_DIR")
-                GPU_SUPPORT=$(load_container_config "$CONTAINER_NAME" "gpu_support" "$GPU_SUPPORT")
-                CUSTOM_CMD=$(load_container_config "$CONTAINER_NAME" "custom_cmd" "$CUSTOM_CMD")
-                PERSISTENT=$(load_container_config "$CONTAINER_NAME" "persistent" "$PERSISTENT")
-                RUN_AS_ROOT=$(load_container_config "$CONTAINER_NAME" "run_as_root" "$RUN_AS_ROOT")
-                DETACH_MODE=$(load_container_config "$CONTAINER_NAME" "detach_mode" "$DETACH_MODE")
-                AUTO_ATTACH=$(load_container_config "$CONTAINER_NAME" "auto_attach" "$AUTO_ATTACH")
-                echo "Loaded saved configuration for container $CONTAINER_NAME"
-            fi
-            shift 2
-            ;;
-        -w|--workspace)
-            WORKSPACE_DIR="$2"
-            shift 2
-            ;;
-        -g|--gpu)
-            GPU_SUPPORT=true
-            shift
-            ;;
-        -c|--cmd)
-            CUSTOM_CMD="$2"
-            shift 2
-            ;;
-        -p|--persistent)
-            PERSISTENT=true
-            shift
-            ;;
-        -r|--root)
-            RUN_AS_ROOT=true
-            shift
-            ;;
-        -D|--detach)
-            DETACH_MODE=true
-            shift
-            ;;
-        --attach)
-            AUTO_ATTACH=true
-            shift
-            ;;
-        --no-attach)
-            AUTO_ATTACH=false
-            shift
-            ;;
-        --restart)
-            # --restart stops and removes existing container before starting a new one
-            CLEAN_START=true
-            shift
-            ;;
-        --save-config)
-            SAVE_CONFIG=true
-            shift
-            ;;
-        --debug-config)
-            # This was already handled earlier
-            shift
-            ;;
-        --list-configs)
-            # This was already handled earlier
-            shift
-            ;;
-        -h|--help)
-            show_yocto_help
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Run '$0 --help' for usage information."
+# Auto-install Docker if not available (but still recommend Podman for Ubuntu 24.04)
+if ! command -v docker >/dev/null 2>&1; then
+    echo "⚠️  Docker not found. Installing Docker automatically..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ -f "$SCRIPT_DIR/docker-install.yml" ]; then
+        echo "Running Docker installation playbook..."
+        if ansible-playbook "$SCRIPT_DIR/docker-install.yml"; then
+            echo "✅ Docker installed successfully"
+            # Add user to docker group and note about logout/login
+            echo "Note: You may need to log out and back in for Docker group permissions to take effect"
+            # Source the new environment
+            hash -r  # Clear command cache
+        else
+            echo "❌ Failed to install Docker automatically"
+            echo "Please install Docker manually or run: ansible-playbook docker-install.yml"
             exit 1
-            ;;
-    esac
-done
+        fi
+    else
+        echo "❌ Docker installation playbook not found at $SCRIPT_DIR/docker-install.yml"
+        echo "Please install Docker manually or use the Podman-based scripts instead"
+        exit 1
+    fi
+fi
 
 # Container image selection
 # Use CROPS/poky with Ubuntu 22.04 base
@@ -633,59 +627,6 @@ if [ "$AUTO_ATTACH" = true ]; then
 fi
 
 exit 0
-
-# Function to verify workspace paths
-verify_workspace_paths() {
-    local CONTAINER_NAME="$1"
-    echo "Verifying workspace paths for $CONTAINER_NAME..."
-    
-    # Check if container is running
-    if ! docker ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
-        echo "Container $CONTAINER_NAME is not running. Starting it..."
-        docker start "$CONTAINER_NAME" > /dev/null 2>&1
-        sleep 2
-    fi
-    
-    # Check the mount points
-    echo "Checking container mount points..."
-    local MOUNTS=$(docker inspect --format='{{range .Mounts}}{{.Source}} -> {{.Destination}}{{printf "\n"}}{{end}}' "$CONTAINER_NAME")
-    echo "$MOUNTS"
-    
-    # Verify workspace structure
-    echo "Verifying workspace directory structure..."
-    docker exec -it "$CONTAINER_NAME" bash -c "
-        # Make sure all workspace directories exist
-        mkdir -p /workdir 2>/dev/null || true
-        mkdir -p /workspace 2>/dev/null || true
-        mkdir -p /projects 2>/dev/null || true
-        
-        # Fix symlinks to ensure compatibility
-        rm -f /workspace 2>/dev/null || true
-        rm -f /workdir 2>/dev/null || true
-        ln -sf /projects /workspace 2>/dev/null || true
-        ln -sf /projects /workdir 2>/dev/null || true
-        
-        echo 'Current workspace structure:'
-        ls -la / | grep -E 'projects|workdir|workspace'
-    "
-    
-    echo "Workspace path verification complete."
-}
-
-# Add --verify-workspace option parsing
-for arg in "$@"; do
-    case $arg in
-        --verify-workspace)
-            VERIFY_WORKSPACE=true
-            shift
-            ;;
-    esac
-done
-
-# If verify workspace is requested, run it after container is started
-if [ "$VERIFY_WORKSPACE" = true ]; then
-    verify_workspace_paths "$CONTAINER_NAME"
-fi
 
 # Function to verify workspace paths
 verify_workspace_paths() {

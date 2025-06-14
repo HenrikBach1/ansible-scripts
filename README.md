@@ -18,8 +18,10 @@ This repository provides scripts for two types of development containers:
 
 ### Standard Scripts
 - `start-ros2-container.sh`: Standard ROS2 container runner
-- `start-yocto-container-docker.sh`: Standard Yocto container runner (Docker)
-- `start-yocto-container-podman.sh`: Yocto container runner using Podman (may work better on Ubuntu 24.04+)
+- `start-yocto-container-docker.sh`: Standard Yocto container runner (Docker) ⚠️ See Ubuntu 24.04 note below
+- `start-yocto-container-podman.sh`: Yocto container runner using Podman ✅ **Recommended for Ubuntu 24.04+**
+
+> **⚠️ Ubuntu 24.04+ Users**: The Docker-based Yocto script will detect Ubuntu 24.04 and warn about BitBake compatibility issues due to user namespace restrictions. **Podman is strongly recommended** for Ubuntu 24.04+ as it runs rootless and avoids these conflicts.
 
 ### Podman Scripts (Rootless Container Alternative)
 
@@ -161,11 +163,11 @@ By default, all containers are set up to be discoverable by VS Code's Remote - C
 For VS Code Remote-Containers support with Podman:
 
 ```bash
-# Set up VS Code to work with Podman containers
-./setup-vscode-podman.sh
-
-# Start your container
+# Start your container (auto-installs Podman and sets up VS Code integration)
 ./start-yocto-container-podman.sh
+
+# Launch VS Code with Podman environment
+./vscode-with-podman.sh
 
 # Then in VS Code:
 # 1. Ctrl+Shift+P
@@ -174,6 +176,7 @@ For VS Code Remote-Containers support with Podman:
 ```
 
 This configures:
+- Auto-installation of Podman if needed
 - Podman socket service for Docker API compatibility
 - Environment variables (`DOCKER_HOST`)
 - VS Code settings for Podman integration

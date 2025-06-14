@@ -234,6 +234,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Auto-install Podman if not available
+if ! command -v podman >/dev/null 2>&1; then
+    log_warn "Podman not found. Installing Podman automatically..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ -f "$SCRIPT_DIR/podman-install.yml" ]; then
+        log_info "Running Podman installation playbook..."
+        if ansible-playbook "$SCRIPT_DIR/podman-install.yml"; then
+            log_success "Podman installed successfully"
+            # Source the new environment
+            hash -r  # Clear command cache
+        else
+            log_error "Failed to install Podman automatically"
+            echo "Please install Podman manually or run: ansible-playbook podman-install.yml"
+            exit 1
+        fi
+    else
+        log_error "Podman installation playbook not found at $SCRIPT_DIR/podman-install.yml"
+        echo "Please install Podman manually: sudo apt install podman"
+        exit 1
+    fi
+fi
+
 # Container image selection
 # Use CROPS/poky with Ubuntu 22.04 base
 CONTAINER_BASE="ubuntu-22.04"
