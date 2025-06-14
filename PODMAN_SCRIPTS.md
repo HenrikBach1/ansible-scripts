@@ -120,6 +120,34 @@ Configures VS Code to work with Podman containers for Remote-Containers extensio
 3. Use `Ctrl+Shift+P` → "Dev Containers: Attach to Running Container..."
 4. Select your Podman container from the list
 
+## VS Code Launcher Script
+
+### `vscode-with-podman.sh`
+Simple, fast VS Code launcher with Podman environment setup.
+- Quick environment setup with minimal output
+- Shows available containers and API status
+- Launches VS Code with proper Podman integration
+- Essential information display without verbose logging
+
+**Usage:**
+```bash
+# Launch VS Code with Podman environment (current directory)
+./vscode-with-podman.sh
+
+# Launch VS Code with specific workspace
+./vscode-with-podman.sh /path/to/workspace
+
+# Launch from project directory
+cd ~/projects && ./ansible/iac-scripts/vscode-with-podman.sh
+```
+
+**What this script does:**
+- Export `DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock`
+- Start Podman socket service if needed
+- Test Podman API connectivity
+- Show available containers
+- Launch VS Code with proper environment for Remote-Containers extension
+
 ## Shared Libraries
 
 ### Updates to `container-command-common.sh`
