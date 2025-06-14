@@ -1,0 +1,99 @@
+#!/bin/bash
+# Helper script for connecting to the ROS2 container with detach support (Podman version)
+
+CONTAINER_NAME="${1:-ros2-workspace-container}"
+
+# Check if container exists
+if ! podman ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' does not exist"
+    exit 1
+fi
+
+# Check if container is running
+if ! podman ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' is not running"
+    echo "Starting container..."
+    podman start "$CONTAINER_NAME"
+    sleep 1
+fi
+
+# Clean up any potential leftover files in mounted directories
+podman exec -it "$CONTAINER_NAME" bash -c '
+# Clean up any existing keep-alive and bash files in workspace
+if [ -d "/projects/keepalive" ]; then
+  rm -rf /projects/keepalive
+fi
+
+if [ -d "/workspace/keepalive" ]; then
+  rm -rf /workspace/keepalive
+fi
+'
+
+# Add container commands before connecting
+if [ -f "$(dirname "$0")/container-command-common.sh" ]; then
+    echo "Ensuring container commands are available..."
+    source "$(dirname "$0")/container-command-common.sh"
+    install_container_commands_podman "$CONTAINER_NAME" "ros2" false
+fi
+
+# Connect to the container with ROS2 environment
+echo "Connecting to $CONTAINER_NAME..."
+
+# Detect ROS2 distro in container
+ROS_DISTRO=$(podman exec "$CONTAINER_NAME" bash -c 'echo $ROS_DISTRO' 2>/dev/null)
+if [ -z "$ROS_DISTRO" ]; then
+    # Try to detect from available ROS installations
+    ROS_DISTRO=$(podman exec "$CONTAINER_NAME" bash -c 'ls /opt/ros/ 2>/dev/null | head -1' 2>/dev/null)
+fi
+
+if [ -n "$ROS_DISTRO" ]; then
+    echo "Detected ROS2 distro: $ROS_DISTRO"
+    podman exec -it "$CONTAINER_NAME" bash -c "
+        echo 'ROS2 Container - $ROS_DISTRO'
+        echo '=========================='
+        source /opt/ros/$ROS_DISTRO/setup.bash 2>/dev/null || true
+        if [ -f /workspace/install/setup.bash ]; then
+            source /workspace/install/setup.bash
+            echo 'Workspace setup loaded'
+        fi
+        export ROS_DOMAIN_ID=42
+        export RMW_IMPLEMENTATION=rmw_cyclonedx_cpp
+        echo 'ROS2 environment ready!'
+        echo ''
+        echo 'Container commands:'
+        echo '  container-help     - Show container help'
+        echo '  container-detach   - Detach from container'
+        echo '  container-stop     - Stop container'
+        echo ''
+        echo 'ROS2 commands:'
+        echo '  ros2 --help        - ROS2 help'
+        echo '  ros2 node list     - List nodes'
+        echo '  ros2 topic list    - List topics'
+        echo '  colcon build       - Build workspace'
+        echo ''
+        exec bash --login
+    "
+else
+    echo "ROS2 distro not detected, connecting with basic environment..."
+    podman exec -it "$CONTAINER_NAME" bash -c "
+        cat /etc/motd 2>/dev/null || true
+        echo 'Container commands available: container-help, container-detach, container-stop'
+        exec bash --login
+    "
+fi
+
+# Define functions - these are only used locally if the container doesn't have its own
+function container-detach() {
+  echo "Detaching from container (container keeps running)..."
+  echo "Container will continue running in the background."
+  touch /home/ubuntu/.container_detach_requested 2>/dev/null || touch /workspace/.container_detach_requested 2>/dev/null || touch /tmp/.container_detach_requested
+  exit 0
+}
+
+# For backwards compatibility
+function detach() {
+    container-detach
+}
+
+export -f container-detach
+export -f detach

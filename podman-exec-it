@@ -1,0 +1,64 @@
+#!/bin/bash
+# This is a wrapper script to make it easy to use podman exec with the container
+# Provides an enhanced version of 'podman exec -it' with additional container commands
+
+# Check if a container name was provided
+if [ -z "$1" ]; then
+    echo "Usage: $0 <container_name> [command]"
+    echo "Commands: help, detach, stop, bash (default is help)"
+    exit 1
+fi
+
+CONTAINER_NAME="$1"
+COMMAND="${2:-help}"
+
+# Check if container exists
+if ! podman ps -a --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' does not exist"
+    exit 1
+fi
+
+# Check if container is running
+if ! podman ps --format '{{.Names}}' | grep -w "^$CONTAINER_NAME$" > /dev/null; then
+    echo "Container '$CONTAINER_NAME' is not running"
+    exit 1
+fi
+
+case "$COMMAND" in
+    help)
+        echo "Yocto Container Command Guide:"
+        echo "-----------------------------"
+        echo "  - Type 'exit' or 'detach': Detach from container (container keeps running)"
+        echo "  - Type 'stop': Stop the container completely (container will shut down)"
+        echo "  - Type 'container-help': Show this help message"
+        echo ""
+        echo "Note: When you detach, a helper script on the host will monitor and restart"
+        echo "      the container if needed, ensuring it continues running in the background."
+        echo ""
+        echo "Note: When you use 'stop', the container will be completely shut down and"
+        echo "      will not continue running in the background."
+        ;;
+    detach)
+        echo "Detaching from container (container keeps running)..."
+        echo "Container will continue running in the background."
+        podman exec -it "$CONTAINER_NAME" bash -c "touch /home/ubuntu/.container_detach_requested || touch /workdir/.container_detach_requested || touch /tmp/.container_detach_requested"
+        ;;
+    stop)
+        echo "Stopping container..."
+        echo "Container will be completely stopped (not just detached)."
+        podman exec -it "$CONTAINER_NAME" bash -c "touch /home/ubuntu/.container_stop_requested || touch /workdir/.container_stop_requested || touch /tmp/.container_stop_requested"
+        podman stop "$CONTAINER_NAME"
+        echo "Container '$CONTAINER_NAME' has been stopped."
+        ;;
+    bash)
+        # Start a new bash session with the help message
+        podman exec -it "$CONTAINER_NAME" bash -c "echo 'Yocto Container Commands:'; echo '  - Type \"exit\" or press Ctrl+D: Detach from container (container keeps running)'; echo '  - Run \"./podman-exec-it $CONTAINER_NAME stop\": Stop the container completely'; echo '  - Run \"./podman-exec-it $CONTAINER_NAME help\": Show help message'; echo ''; exec bash"
+        ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        echo "Available commands: help, detach, stop, bash"
+        exit 1
+        ;;
+esac
+
+exit 0

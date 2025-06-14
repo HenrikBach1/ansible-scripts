@@ -6,6 +6,10 @@ echo "Running script: $file"
 # Store original arguments
 ORIGINAL_ARGS="$@"
 
+# Source the common container runner
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/run-container-common-podman.sh"
+
 # Default values
 ENV_TYPE="yocto"
 CONTAINER_NAME="yocto_container_podman"

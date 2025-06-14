@@ -1,0 +1,263 @@
+# file=ros2-in-podman-install.yml
+---
+# Import Podman installation playbook
+- import_playbook: podman-install.yml
+
+- name: Setup ROS2 Podman Environment
+  hosts: localhost
+  become: false  # Podman runs rootless
+  vars:
+    # ROS2 LTS releases - Set to the desired LTS version
+    # 'humble' is LTS until May 2027
+    # 'iron' is LTS until May 2028
+    # 'jazzy' is LTS until May 2029
+    ros2_distro: jazzy
+    # Set to false to enforce LTS versions only
+    allow_non_lts: false
+    # LTS releases list - used to validate distribution if allow_non_lts is false
+    ros2_lts_releases:
+      - humble
+      - iron
+      - jazzy
+    # Only keep the selected distro, remove others (even if they are LTS)
+    keep_only_selected_distro: true
+    podman_image_name: "ros2_workspace"
+    use_prebuilt_image: true
+    additional_tools:
+      - python3-pip
+      - python3-colcon-common-extensions
+      - git
+      - build-essential
+      - cmake
+      - vim
+      - nano
+    workspace_dir: "{{ ansible_env.HOME }}/ros2_ws"
+
+  tasks:
+    # Validate that the selected ROS2 distribution is an LTS release
+    - name: Validate ROS2 distribution is LTS
+      fail:
+        msg: "The selected ROS2 distribution '{{ ros2_distro }}' is not an LTS release. Please choose from: {{ ros2_lts_releases | join(', ') }} or set allow_non_lts to true."
+      when: not allow_non_lts | bool and ros2_distro not in ros2_lts_releases
+
+    # Identify and remove non-LTS ROS2 Podman images
+    - name: Get list of Podman images
+      command: podman images osrf/ros --format "{% raw %}{{.Tag}}{% endraw %}"
+      register: podman_images
+      changed_when: false
+      failed_when: false
+      
+    - name: Identify non-LTS ROS2 images
+      set_fact:
+        non_lts_images: "{{ podman_images.stdout_lines | reject('in', ros2_lts_releases) | list }}"
+      when: podman_images.stdout_lines is defined
+
+    - name: Remove non-LTS ROS2 images (if keep_only_selected_distro is true)
+      command: "podman rmi osrf/ros:{{ item }}"
+      loop: "{{ non_lts_images }}"
+      ignore_errors: yes
+      when: 
+        - keep_only_selected_distro | bool
+        - podman_images.stdout_lines is defined
+        - non_lts_images | length > 0
+
+    - name: Remove other LTS images except selected (if keep_only_selected_distro is true) 
+      command: "podman rmi osrf/ros:{{ item }}"
+      loop: "{{ ros2_lts_releases }}"
+      ignore_errors: yes
+      when:
+        - keep_only_selected_distro | bool
+        - item != ros2_distro
+        - podman_images.stdout_lines is defined
+        - item in podman_images.stdout_lines
+
+    # Create workspace directory
+    - name: Create ROS2 workspace directory
+      file:
+        path: "{{ workspace_dir }}/src"
+        state: directory
+        mode: '0755'
+
+    # Pull ROS2 image if using prebuilt
+    - name: Pull ROS2 image (prebuilt)
+      command: "podman pull osrf/ros:{{ ros2_distro }}"
+      when: use_prebuilt_image | bool
+
+    # Create custom ROS2 Podman container
+    - name: Create ROS2 container with Podman
+      command: >
+        podman create
+        --name ros2-workspace-container
+        --workdir /workspace
+        -v {{ workspace_dir }}:/workspace:Z
+        --env ROS_DISTRO={{ ros2_distro }}
+        --env LANG=en_US.UTF-8
+        --env LC_ALL=en_US.UTF-8
+        --interactive
+        --tty
+        osrf/ros:{{ ros2_distro }}
+      register: container_create
+      ignore_errors: yes
+
+    - name: Handle existing container
+      block:
+        - name: Remove existing container if it exists
+          command: podman rm -f ros2-workspace-container
+          ignore_errors: yes
+          
+        - name: Create ROS2 container with Podman (retry)
+          command: >
+            podman create
+            --name ros2-workspace-container
+            --workdir /workspace
+            -v {{ workspace_dir }}:/workspace:Z
+            --env ROS_DISTRO={{ ros2_distro }}
+            --env LANG=en_US.UTF-8
+            --env LC_ALL=en_US.UTF-8
+            --interactive
+            --tty
+            osrf/ros:{{ ros2_distro }}
+      when: container_create.rc != 0
+
+    - name: Start the ROS2 container
+      command: podman start ros2-workspace-container
+
+    - name: Install additional tools in container
+      command: >
+        podman exec ros2-workspace-container bash -c 
+        "apt-get update && apt-get install -y {{ additional_tools | join(' ') }}"
+      when: additional_tools is defined and additional_tools | length > 0
+
+    - name: Create container command installation script
+      copy:
+        content: |
+          #!/bin/bash
+          # Install container management commands
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          source "$SCRIPT_DIR/container-command-common.sh"
+          install_container_commands_podman ros2-workspace-container ros2 true
+        dest: "{{ ansible_env.HOME }}/install-ros2-container-commands.sh"
+        mode: '0755'
+
+    - name: Install container commands
+      command: "bash {{ ansible_env.HOME }}/install-ros2-container-commands.sh"
+      args:
+        chdir: "{{ playbook_dir }}"
+
+    - name: Test ROS2 installation
+      command: podman exec ros2-workspace-container bash -c "source /opt/ros/{{ ros2_distro }}/setup.bash && ros2 --version"
+      register: ros2_test
+
+    - name: Display ROS2 test result
+      debug:
+        msg: "ROS2 test: {{ ros2_test.stdout }}"
+
+    - name: Create example ROS2 package
+      command: >
+        podman exec ros2-workspace-container bash -c 
+        "cd /workspace/src && 
+         source /opt/ros/{{ ros2_distro }}/setup.bash && 
+         ros2 pkg create --build-type ament_cmake my_package"
+      ignore_errors: yes
+
+    - name: Build ROS2 workspace
+      command: >
+        podman exec ros2-workspace-container bash -c 
+        "cd /workspace && 
+         source /opt/ros/{{ ros2_distro }}/setup.bash && 
+         colcon build"
+      ignore_errors: yes
+
+    - name: Create ROS2 environment setup script
+      copy:
+        content: |
+          #!/bin/bash
+          # ROS2 Environment Setup Script
+          # Run this inside the container to set up ROS2 environment
+          
+          set -e
+          
+          ROS_DISTRO="{{ ros2_distro }}"
+          
+          echo "Setting up ROS2 environment for distro: $ROS_DISTRO"
+          
+          # Source ROS2 setup
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          
+          # Source workspace setup if it exists
+          if [ -f "/workspace/install/setup.bash" ]; then
+              source /workspace/install/setup.bash
+              echo "Workspace setup sourced"
+          fi
+          
+          # Export ROS environment variables
+          export ROS_DOMAIN_ID=42
+          export RMW_IMPLEMENTATION=rmw_cyclonedx_cpp
+          
+          echo "ROS2 environment ready!"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          echo "ROS_DOMAIN_ID: $ROS_DOMAIN_ID"
+          echo "RMW_IMPLEMENTATION: $RMW_IMPLEMENTATION"
+          
+          echo ""
+          echo "Quick commands:"
+          echo "  ros2 --help      - Show ROS2 help"
+          echo "  ros2 node list   - List running nodes"
+          echo "  ros2 topic list  - List available topics"
+          echo "  colcon build     - Build workspace"
+          echo "  ros2 run <pkg> <node> - Run a node"
+        dest: "{{ workspace_dir }}/setup-ros2-env.sh"
+        mode: '0755'
+
+    - name: Create ROS2 connection script
+      copy:
+        content: |
+          #!/bin/bash
+          # Connect to ROS2 container and set up environment
+          
+          # Check if container is running
+          if ! podman ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -w "^ros2-workspace-container$" > /dev/null; then
+              echo "Starting ROS2 container..."
+              podman start ros2-workspace-container
+              sleep 2
+          fi
+          
+          # Connect with ROS2 environment
+          echo "Connecting to ROS2 container..."
+          podman exec -it ros2-workspace-container bash -c "
+              source /opt/ros/{{ ros2_distro }}/setup.bash
+              if [ -f /workspace/install/setup.bash ]; then
+                  source /workspace/install/setup.bash
+              fi
+              export ROS_DOMAIN_ID=42
+              echo 'ROS2 {{ ros2_distro }} environment ready!'
+              echo 'Workspace: /workspace'
+              exec bash
+          "
+        dest: "{{ ansible_env.HOME }}/connect-ros2-container.sh"
+        mode: '0755'
+
+    - name: Show completion message
+      debug:
+        msg: |
+          ROS2 Podman environment setup complete!
+          
+          Container: ros2-workspace-container
+          ROS2 Distribution: {{ ros2_distro }}
+          Workspace: {{ workspace_dir }}
+          
+          Quick start:
+          1. Connect to container: {{ ansible_env.HOME }}/connect-ros2-container.sh
+          2. Or use: ./podman-exec-it ros2-workspace-container bash
+          3. Build workspace: colcon build
+          4. Run nodes: ros2 run <package> <node>
+          
+          Container commands available inside container:
+          - container-help: Show help
+          - container-detach: Detach from container
+          - container-stop: Stop container
+          - container-remove: Remove container
+          
+          Files created:
+          - {{ workspace_dir }}/setup-ros2-env.sh - Environment setup
+          - {{ ansible_env.HOME }}/connect-ros2-container.sh - Connection script

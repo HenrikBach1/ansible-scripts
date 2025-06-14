@@ -1,0 +1,132 @@
+# file=setup-podman-user.yml
+# This playbook sets up Podman for rootless operation for the current user.
+---
+- hosts: localhost
+  become: false
+  tasks:
+    - name: Check if Podman is installed
+      command: which podman
+      register: podman_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Podman is not installed
+      fail:
+        msg: "Podman is not installed. Please run podman-install.yml first."
+      when: podman_check.rc != 0
+
+    - name: Check current user's subordinate UID/GID ranges
+      command: id
+      register: user_id_info
+      changed_when: false
+
+    - name: Display user ID information
+      debug:
+        msg: "Current user ID info: {{ user_id_info.stdout }}"
+
+    - name: Check subordinate UID ranges
+      command: cat /etc/subuid
+      register: subuid_check
+      failed_when: false
+      changed_when: false
+
+    - name: Check subordinate GID ranges  
+      command: cat /etc/subgid
+      register: subgid_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create Podman config directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ansible_env.HOME }}/.config/containers"
+        - "{{ ansible_env.HOME }}/.local/share/containers"
+
+    - name: Configure Podman registries (if not exists)
+      copy:
+        content: |
+          [registries.search]
+          registries = ['docker.io', 'quay.io']
+          
+          [registries.insecure]
+          registries = []
+          
+          [registries.block]
+          registries = []
+        dest: "{{ ansible_env.HOME }}/.config/containers/registries.conf"
+        mode: '0644'
+        force: false
+
+    - name: Configure Podman storage (if not exists)
+      copy:
+        content: |
+          [storage]
+          driver = "overlay"
+          runroot = "/run/user/{{ ansible_user_uid }}/containers"
+          graphroot = "{{ ansible_env.HOME }}/.local/share/containers/storage"
+          
+          [storage.options]
+          mount_program = "/usr/bin/fuse-overlayfs"
+        dest: "{{ ansible_env.HOME }}/.config/containers/storage.conf"
+        mode: '0644'
+        force: false
+
+    - name: Test Podman functionality
+      command: podman --version
+      register: podman_version
+
+    - name: Test Podman system info
+      command: podman system info
+      register: podman_info
+      failed_when: false
+
+    - name: Test Podman with hello-world
+      command: podman run --rm hello-world
+      register: podman_test
+      failed_when: false
+
+    - name: Show Podman setup results
+      debug:
+        msg: |
+          Podman rootless setup for user {{ ansible_env.USER }}:
+          
+          Version: {{ podman_version.stdout }}
+          
+          Configuration files created:
+          - {{ ansible_env.HOME }}/.config/containers/registries.conf
+          - {{ ansible_env.HOME }}/.config/containers/storage.conf
+          
+          Storage location: {{ ansible_env.HOME }}/.local/share/containers/storage
+          
+          Test result: {{ 'SUCCESS' if podman_test.rc == 0 else 'FAILED' }}
+          
+          {% if podman_test.rc != 0 %}
+          Error: {{ podman_test.stderr }}
+          
+          Troubleshooting:
+          1. Check if your user has subordinate UID/GID ranges:
+             - cat /etc/subuid | grep {{ ansible_env.USER }}
+             - cat /etc/subgid | grep {{ ansible_env.USER }}
+          2. If missing, add with: sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 {{ ansible_env.USER }}
+          3. Log out and log back in
+          4. Try: podman system migrate
+          {% endif %}
+
+    - name: Show next steps
+      debug:
+        msg: |
+          Podman is ready for rootless operation!
+          
+          Quick commands:
+          - podman run --rm hello-world  # Test container
+          - podman ps                    # List running containers
+          - podman images                # List images
+          - podman pull <image>          # Pull an image
+          - podman system info           # Show system information
+          
+          No daemon required - containers run as your user!
+          
+          Note: Unlike Docker, Podman doesn't require group membership or root privileges.

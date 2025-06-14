@@ -1,0 +1,39 @@
+#!/bin/bash
+# Enhanced podman exec script to ensure container stays running even with detached commands
+# Usage: ./podman-exec-detached <container_name> <command>
+
+# Source the container utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/container-utils.sh" 2>/dev/null || {
+    # Basic implementation if container-utils.sh is not available
+    run_detached_command() {
+        local container_name="$1"
+        shift
+        local command="$@"
+        
+        # Check if container is running
+        if ! podman ps --format '{{.Names}}' | grep -w "^$container_name$" > /dev/null; then
+            echo "Container '$container_name' is not running"
+            return 1
+        fi
+        
+        # Run the command in detached mode
+        podman exec -d "$container_name" bash -c "$command"
+        return $?
+    }
+}
+
+# Check if a container name was provided
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <container_name> <command>"
+    echo "Runs a command in detached mode while ensuring the container stays running"
+    exit 1
+fi
+
+CONTAINER_NAME="$1"
+shift
+COMMAND="$@"
+
+# Use the common function to run detached commands
+run_detached_command "$CONTAINER_NAME" "$COMMAND"
+exit $?

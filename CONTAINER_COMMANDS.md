@@ -4,21 +4,31 @@ This document provides a comprehensive guide to working with our development con
 
 ## Current Working Solution (Updated June 2025)
 
-**✅ Container commands now work correctly in all environments:**
+**✅ Container commands now work correctly in all environments with both Docker and Podman:**
 
-- **CLI Connections**: Using `./yocto-connect` or `./ros2-connect`
+- **CLI Connections**: Using `./yocto-connect` / `./yocto-podman-connect` or `./ros2-connect` / `./ros2-podman-connect`
 - **VS Code Remote Containers**: Full compatibility with proper PATH and commands
-- **Direct Docker Access**: Commands available when using login shells
+- **Direct Docker/Podman Access**: Commands available when using login shells
+- **Rootless Podman**: Podman containers run without root privileges or daemon
 
 ### Architecture Overview
 
-The container command system uses a modular architecture:
+The container command system uses a modular architecture that supports both Docker and Podman:
 
-1. **Container Creation**: `start-yocto-container-docker.sh` / `start-ros2-container.sh`
-2. **Command Installation**: `ensure-yocto-container-commands.sh` / `ensure-ros2-container-commands.sh`
-3. **Shared Library**: `container-command-common.sh` (provides reusable functions)
-4. **Connection Scripts**: `yocto-connect` / `ros2-connect` (enhanced connection with proper environment)
+1. **Container Creation**: 
+   - Docker: `start-yocto-container-docker.sh` / `start-ros2-container.sh`
+   - Podman: `start-yocto-container-podman.sh` / `start-ros2-container-podman.sh`
+2. **Command Installation**: 
+   - Docker: `ensure-yocto-container-commands.sh` / `ensure-ros2-container-commands.sh`
+   - Podman: `ensure-yocto-container-commands-podman.sh` / `install_container_commands_podman()` function
+3. **Shared Library**: `container-command-common.sh` (provides reusable functions for both Docker and Podman)
+4. **Connection Scripts**: 
+   - Docker: `yocto-connect` / `ros2-connect`
+   - Podman: `yocto-podman-connect` / `ros2-podman-connect`
 5. **Container Watch**: `container-watch.sh` (monitors container state and handles command requests)
+6. **Exec Wrappers**:
+   - Docker: `docker-exec-it` / `docker-exec-detached`
+   - Podman: `podman-exec-it` / `podman-exec-detached`
 
 ### Key Design Principles
 
@@ -189,20 +199,82 @@ The `start-ros2-container.sh` and `start-yocto-container-docker.sh` scripts prov
 ./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 ```
 
-**Note**: The `--restart` option is equivalent to `--clean` - it stops and removes the existing container, then creates a new one with the current configuration. This ensures a completely fresh container setup.
+## Podman Container Management
 
-### Fixing Missing `/projects` Directory
+All Docker functionality is now available with Podman, providing rootless container operation without requiring a daemon.
 
-If you have containers created with older scripts that are missing the `/projects` mount, use the `--restart` option:
+### Podman vs Docker Commands
+
+| Function | Docker | Podman |
+|----------|--------|--------|
+| **Start Yocto Container** | `./start-yocto-container-docker.sh` | `./start-yocto-container-podman.sh` |
+| **Connect to Yocto** | `./yocto-connect` | `./yocto-podman-connect` |
+| **Connect to ROS2** | `./ros2-connect` | `./ros2-podman-connect` |
+| **Interactive Exec** | `./docker-exec-it <container>` | `./podman-exec-it <container>` |
+| **Detached Exec** | `./docker-exec-detached <container> <cmd>` | `./podman-exec-detached <container> <cmd>` |
+| **Restart Yocto** | `./restart-yocto-container.sh` | `./restart-yocto-container-podman.sh` |
+| **Restart ROS2** | `./restart-ros2-container.sh` | `./restart-ros2-container-podman.sh` |
+| **Install Commands** | `./ensure-yocto-container-commands.sh` | `./ensure-yocto-container-commands-podman.sh` |
+
+### Podman Quick Start
 
 ```bash
-./start-ros2-container.sh --restart [container_name]
-./start-yocto-container-docker.sh --restart [container_name]
+# 1. Install Podman
+ansible-playbook podman-install.yml
+
+# 2. Set up Yocto development
+ansible-playbook yocto-in-podman-install.yml
+
+# 3. Connect to container
+./yocto-podman-connect yocto-workspace-container
+
+# 4. Or create/start manually
+./start-yocto-container-podman.sh
+
+# 5. Container commands work the same way
+container-help      # Show available commands
+container-detach    # Detach while keeping container running
+container-stop      # Stop container
 ```
 
-This recreates the container with all proper volume mounts, including the `/projects` directory that VS Code requires for proper file access.
+### Podman Advantages
 
-If no container name is provided, these commands operate on the default container (`ros2_container` or `yocto_container`).
+- **Rootless Operation**: No need for root privileges or docker group membership
+- **No Daemon**: Containers run as regular user processes
+- **Better Security**: Rootless containers provide better isolation
+- **Drop-in Replacement**: Most Docker commands work with `podman` substitution
+- **Systemd Integration**: Can run containers as systemd user services
+
+### Container Commands in Podman
+
+The same container commands (`container-help`, `container-detach`, `container-stop`, `container-remove`) work identically in Podman containers. The installation and usage patterns are the same:
+
+```bash
+# Commands installed during container creation
+./start-yocto-container-podman.sh
+
+# Or install manually using shared library
+source container-command-common.sh
+install_container_commands_podman yocto-workspace-container yocto
+
+# Commands work the same way
+podman exec -it yocto-workspace-container bash
+# Inside container:
+container-help     # Works identically to Docker version
+container-detach   # Creates same marker files
+container-stop     # Same behavior
+```
+
+### Podman Container Lifecycle
+
+Podman containers can be managed with the same lifecycle patterns as Docker containers:
+
+1. **Create/Start**: `./start-yocto-container-podman.sh`
+2. **Connect**: `./yocto-podman-connect`
+3. **Work**: Use container commands as needed
+4. **Detach**: `container-detach` (keeps running) or `exit` (stops container)
+5. **Restart**: `./restart-yocto-container-podman.sh`
+6. **Remove**: `podman rm <container>` or `container-remove`
 
 ## Connecting to Containers
 

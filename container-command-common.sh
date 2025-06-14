@@ -3,13 +3,26 @@
 # Common library functions for container command installation
 # This library provides shared functionality for both add-commands-to-container.sh and ensure-yocto-container-commands.sh
 
-# Detect container type (ros2, yocto, generic)
+# Detect container type (ros2, yocto, generic) - Docker version
 detect_container_type() {
     local container_name="$1"
     
     if docker exec "$container_name" bash -c "grep -q crops/poky /etc/motd 2>/dev/null || grep -q poky /etc/motd 2>/dev/null || [ -d /workdir ]" &>/dev/null; then
         echo "yocto"
     elif docker exec "$container_name" bash -c "grep -q ros /etc/motd 2>/dev/null || [ -d /opt/ros ]" &>/dev/null; then
+        echo "ros2"
+    else
+        echo "generic"
+    fi
+}
+
+# Detect container type (ros2, yocto, generic) - Podman version  
+detect_container_type_podman() {
+    local container_name="$1"
+    
+    if podman exec "$container_name" bash -c "grep -q crops/poky /etc/motd 2>/dev/null || grep -q poky /etc/motd 2>/dev/null || [ -d /workdir ]" &>/dev/null; then
+        echo "yocto"
+    elif podman exec "$container_name" bash -c "grep -q ros /etc/motd 2>/dev/null || [ -d /opt/ros ]" &>/dev/null; then
         echo "ros2"
     else
         echo "generic"
@@ -344,6 +357,7 @@ EOF
 
 # Export all functions
 export -f detect_container_type
+export -f detect_container_type_podman
 export -f get_command_content
 export -f create_command_script
 export -f add_path_to_init_file
@@ -355,3 +369,114 @@ export -f update_user_bashrc_files
 export -f create_system_symlinks
 export -f create_completion_script
 export -f create_yocto_welcome_script
+export -f install_container_commands_podman
+
+# Install container commands into a Podman container
+install_container_commands_podman() {
+    local container_name="$1"
+    local container_type="${2:-$(detect_container_type_podman "$container_name")}"
+    local force_install="${3:-false}"
+    
+    echo "Installing container commands in Podman container '$container_name'..."
+    
+    # Check if container exists and is running
+    if ! podman ps --format '{{.Names}}' | grep -w "^$container_name$" > /dev/null; then
+        echo "Error: Container '$container_name' is not running"
+        return 1
+    fi
+    
+    # Check if commands already exist (unless forcing)
+    if [ "$force_install" != "true" ]; then
+        if podman exec "$container_name" bash -c "command -v container-help >/dev/null 2>&1"; then
+            echo "Container commands already installed in '$container_name'"
+            return 0
+        fi
+    fi
+    
+    # Create temporary directory for command installation
+    local temp_dir="/tmp/container_commands_install_$$"
+    mkdir -p "$temp_dir"
+    
+    # Create command scripts
+    create_command_script "container-detach" "$(get_command_content detach)" "$temp_dir"
+    create_command_script "container-stop" "$(get_command_content stop)" "$temp_dir"
+    create_command_script "container-remove" "$(get_command_content remove)" "$temp_dir"
+    create_command_script "container-help" "$(get_command_content help)" "$temp_dir"
+    
+    # Create initialization script
+    create_init_script "$temp_dir" "$container_type"
+    
+    # Create completion script
+    create_completion_script "$temp_dir"
+    
+    # Copy commands to container
+    echo "Copying command scripts to container..."
+    podman cp "$temp_dir/." "$container_name:/tmp/container_commands_staging/"
+    
+    # Install commands in container
+    local install_script="
+#!/bin/bash
+set -e
+
+echo 'Installing container commands...'
+
+# Create target directories
+mkdir -p /tmp/.container_commands
+mkdir -p /usr/local/bin 2>/dev/null || true
+
+# Copy commands from staging
+cp /tmp/container_commands_staging/* /tmp/.container_commands/ 2>/dev/null || true
+chmod +x /tmp/.container_commands/* 2>/dev/null || true
+
+# Try to install in system-wide location if possible
+if [ -w /usr/local/bin ]; then
+    cp /tmp/.container_commands/container-* /usr/local/bin/ 2>/dev/null || true
+    chmod +x /usr/local/bin/container-* 2>/dev/null || true
+    echo 'Commands installed in /usr/local/bin'
+else
+    echo 'Commands installed in /tmp/.container_commands'
+fi
+
+# Set up PATH in shell initialization files
+init_content='
+# Container commands initialization
+if [ -d /usr/local/bin ]; then
+    export PATH=\"/usr/local/bin:\$PATH\"
+fi
+if [ -d /tmp/.container_commands ]; then
+    export PATH=\"/tmp/.container_commands:\$PATH\"
+fi
+'
+
+# Update bashrc files
+for bashrc in /etc/bash.bashrc /root/.bashrc /home/*/.bashrc /etc/skel/.bashrc; do
+    if [ -f \"\$bashrc\" ] && [ -w \"\$bashrc\" ]; then
+        if ! grep -q 'container_commands' \"\$bashrc\"; then
+            echo \"\$init_content\" >> \"\$bashrc\"
+            echo \"Updated \$bashrc\"
+        fi
+    fi
+done
+
+# Set up profile.d if available
+if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+    echo \"\$init_content\" > /etc/profile.d/container-commands.sh
+    chmod +x /etc/profile.d/container-commands.sh
+    echo 'Created /etc/profile.d/container-commands.sh'
+fi
+
+# Clean up staging
+rm -rf /tmp/container_commands_staging
+
+echo 'Container commands installation complete!'
+"
+    
+    # Execute installation script in container
+    echo "$install_script" | podman exec -i "$container_name" bash
+    
+    # Clean up local temporary directory
+    rm -rf "$temp_dir"
+    
+    echo "Successfully installed container commands in '$container_name'"
+    return 0
+}

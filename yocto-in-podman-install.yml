@@ -1,0 +1,224 @@
+# file=yocto-in-podman-install.yml
+---
+# Import Podman installation playbook
+- import_playbook: podman-install.yml
+
+- name: Setup Yocto Podman Environment
+  hosts: localhost
+  become: false  # Podman runs rootless
+  vars:
+    # Yocto release - Set to the desired version for development inside the container
+    # Available releases: https://wiki.yoctoproject.org/wiki/Releases
+    # 'scarthgap' (5.0) is LTS until April 2029
+    # 'kirkstone' (4.0) is LTS until April 2026
+    yocto_release: scarthgap
+    # Container base OS - CROPS/poky uses distro names as tags, NOT Yocto release names
+    # CROPS/poky is a build environment with tools to build Yocto, not Yocto itself
+    # Available tags: ubuntu-22.04, ubuntu-20.04, debian-11, fedora-40, etc.
+    container_base: ubuntu-22.04
+    # Set to false to enforce LTS versions only
+    allow_non_lts: false
+    # LTS releases list - used to validate release if allow_non_lts is false
+    yocto_lts_releases:
+      - scarthgap
+      - kirkstone
+    # Only keep the selected release, remove others (even if they are LTS)
+    keep_only_selected_release: true
+    podman_image_name: "yocto_workspace"
+    use_prebuilt_image: false
+    # Additional tools for Yocto development
+    additional_tools:
+      - python3-pip
+      - git
+      - build-essential
+      - chrpath
+      - diffstat
+      - gawk
+      - texinfo
+      - wget
+      - curl
+      - vim
+      - nano
+      - locales
+      - cpio
+      - file
+      - iputils-ping
+      - python3-distutils
+      - python3-git
+      - python3-jinja2
+      - python3-pexpect
+      - pylint
+
+  tasks:
+    - name: Validate Yocto release (LTS check)
+      fail:
+        msg: |
+          Invalid Yocto release '{{ yocto_release }}'. 
+          Only LTS releases are allowed: {{ yocto_lts_releases | join(', ') }}
+          Set allow_non_lts: true to use non-LTS releases.
+      when: not allow_non_lts and yocto_release not in yocto_lts_releases
+
+    - name: Create local workspace directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ansible_env.HOME }}/yocto-workspace"
+        - "{{ ansible_env.HOME }}/yocto-workspace/downloads"
+        - "{{ ansible_env.HOME }}/yocto-workspace/sstate-cache"
+        - "{{ ansible_env.HOME }}/yocto-workspace/build"
+        - "{{ ansible_env.HOME }}/yocto-workspace/layers"
+
+    - name: Pull CROPS/poky container image
+      command: "podman pull crops/poky:{{ container_base }}"
+      register: pull_result
+
+    - name: Display pull result
+      debug:
+        msg: "Container image pulled: {{ pull_result.stdout_lines[-1] if pull_result.stdout_lines else 'Success' }}"
+
+    - name: Create Yocto container with Podman
+      command: >
+        podman create 
+        --name yocto-workspace-container
+        --workdir /workdir
+        -v {{ ansible_env.HOME }}/yocto-workspace:/workdir:Z
+        -v {{ ansible_env.HOME }}/yocto-workspace/downloads:/workdir/downloads:Z
+        -v {{ ansible_env.HOME }}/yocto-workspace/sstate-cache:/workdir/sstate-cache:Z
+        --env LANG=en_US.UTF-8
+        --env LC_ALL=en_US.UTF-8
+        --env USER={{ ansible_env.USER }}
+        --env USERID={{ ansible_user_uid }}
+        --env GROUPID={{ ansible_user_gid }}
+        --interactive
+        --tty
+        crops/poky:{{ container_base }}
+      register: container_create
+      ignore_errors: yes
+
+    - name: Handle existing container
+      block:
+        - name: Remove existing container if it exists
+          command: podman rm -f yocto-workspace-container
+          ignore_errors: yes
+          
+        - name: Create Yocto container with Podman (retry)
+          command: >
+            podman create 
+            --name yocto-workspace-container
+            --workdir /workdir
+            -v {{ ansible_env.HOME }}/yocto-workspace:/workdir:Z
+            -v {{ ansible_env.HOME }}/yocto-workspace/downloads:/workdir/downloads:Z
+            -v {{ ansible_env.HOME }}/yocto-workspace/sstate-cache:/workdir/sstate-cache:Z
+            --env LANG=en_US.UTF-8
+            --env LC_ALL=en_US.UTF-8
+            --env USER={{ ansible_env.USER }}
+            --env USERID={{ ansible_user_uid }}
+            --env GROUPID={{ ansible_user_gid }}
+            --interactive
+            --tty
+            crops/poky:{{ container_base }}
+      when: container_create.rc != 0
+
+    - name: Start the Yocto container
+      command: podman start yocto-workspace-container
+
+    - name: Install additional tools in container
+      command: >
+        podman exec yocto-workspace-container bash -c 
+        "apt-get update && apt-get install -y {{ additional_tools | join(' ') }}"
+      when: additional_tools is defined and additional_tools | length > 0
+
+    - name: Create container command installation script
+      copy:
+        content: |
+          #!/bin/bash
+          # Install container management commands
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          source "$SCRIPT_DIR/container-command-common.sh"
+          install_container_commands_podman yocto-workspace-container yocto true
+        dest: "{{ ansible_env.HOME }}/install-yocto-container-commands.sh"
+        mode: '0755'
+
+    - name: Install container commands
+      command: "bash {{ ansible_env.HOME }}/install-yocto-container-commands.sh"
+      args:
+        chdir: "{{ playbook_dir }}"
+
+    - name: Test container functionality
+      command: podman exec yocto-workspace-container bash -c "echo 'Yocto container is working!' && which bitbake || echo 'BitBake not found in PATH'"
+      register: container_test
+
+    - name: Display container test result
+      debug:
+        msg: "Container test: {{ container_test.stdout }}"
+
+    - name: Create Yocto project initialization script
+      copy:
+        content: |
+          #!/bin/bash
+          # Yocto Project Initialization Script
+          # Run this inside the container to set up a new Yocto project
+          
+          set -e
+          
+          YOCTO_RELEASE="{{ yocto_release }}"
+          
+          echo "Initializing Yocto project with release: $YOCTO_RELEASE"
+          
+          # Clone poky if not exists
+          if [ ! -d "/workdir/poky" ]; then
+              echo "Cloning poky repository..."
+              git clone git://git.yoctoproject.org/poky /workdir/poky
+              cd /workdir/poky
+              git checkout $YOCTO_RELEASE
+          else
+              echo "Poky repository already exists"
+              cd /workdir/poky
+              git checkout $YOCTO_RELEASE
+              git pull origin $YOCTO_RELEASE
+          fi
+          
+          # Create build directory if not exists
+          if [ ! -d "/workdir/build" ]; then
+              echo "Setting up build environment..."
+              cd /workdir/poky
+              source oe-init-build-env /workdir/build
+          else
+              echo "Build directory already exists"
+          fi
+          
+          echo "Yocto project initialized!"
+          echo "To start building:"
+          echo "1. Connect to container: ./yocto-podman-connect"
+          echo "2. Source build environment: source /workdir/poky/oe-init-build-env /workdir/build"
+          echo "3. Build an image: bitbake core-image-minimal"
+        dest: "{{ ansible_env.HOME }}/yocto-workspace/init-yocto-project.sh"
+        mode: '0755'
+
+    - name: Show completion message
+      debug:
+        msg: |
+          Yocto Podman environment setup complete!
+          
+          Container: yocto-workspace-container
+          Workspace: {{ ansible_env.HOME }}/yocto-workspace
+          
+          Quick start:
+          1. Connect to container: ./yocto-podman-connect yocto-workspace-container
+          2. Initialize project: ./init-yocto-project.sh
+          3. Start building: bitbake core-image-minimal
+          
+          Container commands available inside container:
+          - container-help: Show help
+          - container-detach: Detach from container
+          - container-stop: Stop container
+          - container-remove: Remove container
+          
+          Workspace directories:
+          - /workdir: Main workspace ({{ ansible_env.HOME }}/yocto-workspace)
+          - /workdir/downloads: Download cache
+          - /workdir/sstate-cache: Shared state cache
+          - /workdir/build: Build directory
+          - /workdir/layers: Additional layers

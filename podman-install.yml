@@ -1,0 +1,123 @@
+# file=podman-install.yml
+# This playbook installs Podman on an Ubuntu system, configures it, and tests the installation.
+
+---
+- name: Install and configure Podman
+  hosts: localhost
+  become: true
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name:
+          - curl
+          - wget
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: yes
+
+    - name: Get Ubuntu version info
+      set_fact:
+        ubuntu_version: "{{ ansible_distribution_version }}"
+
+    - name: Add Podman repository key (Ubuntu 22.04+)
+      ansible.builtin.apt_key:
+        url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ubuntu_version }}/Release.key
+        state: present
+      when: ansible_distribution_version is version('22.04', '>=')
+
+    - name: Add Podman repository (Ubuntu 22.04+)
+      apt_repository:
+        repo: "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ubuntu_version }}/ /"
+        state: present
+        filename: podman
+      when: ansible_distribution_version is version('22.04', '>=')
+
+    - name: Update apt cache after adding repository
+      apt:
+        update_cache: yes
+      when: ansible_distribution_version is version('22.04', '>=')
+
+    - name: Install Podman from repository (Ubuntu 22.04+)
+      apt:
+        name:
+          - podman
+          - buildah
+          - skopeo
+        state: present
+      when: ansible_distribution_version is version('22.04', '>=')
+
+    - name: Install Podman from default repos (Ubuntu 20.04 and older)
+      apt:
+        name:
+          - podman
+          - podman-toolbox
+        state: present
+        update_cache: yes
+      when: ansible_distribution_version is version('22.04', '<')
+
+    - name: Create podman directories for rootless operation
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0755'
+      loop:
+        - "/home/{{ lookup('env','USER') }}/.config/containers"
+        - "/home/{{ lookup('env','USER') }}/.local/share/containers"
+      become: false
+
+    - name: Configure registries for Podman
+      copy:
+        content: |
+          [registries.search]
+          registries = ['docker.io', 'quay.io']
+          
+          [registries.insecure]
+          registries = []
+          
+          [registries.block]
+          registries = []
+        dest: "/home/{{ lookup('env','USER') }}/.config/containers/registries.conf"
+        owner: "{{ lookup('env','USER') }}"
+        group: "{{ lookup('env','USER') }}"
+        mode: '0644'
+      become: false
+
+    - name: Enable lingering for user (allows user containers to run at boot)
+      command: "loginctl enable-linger {{ lookup('env','USER') }}"
+      become: true
+
+    - name: Test Podman installation
+      command: podman --version
+      register: podman_version
+      become: false
+
+    - name: Display Podman version
+      debug:
+        msg: "Podman installed successfully: {{ podman_version.stdout }}"
+
+    - name: Test Podman with hello-world container
+      command: podman run --rm hello-world
+      register: podman_test
+      become: false
+      ignore_errors: yes
+
+    - name: Display test result
+      debug:
+        msg: "Podman test result: {{ 'SUCCESS' if podman_test.rc == 0 else 'FAILED - ' + podman_test.stderr }}"
+
+    - name: Show next steps
+      debug:
+        msg: |
+          Podman installation complete!
+          
+          Next steps:
+          1. Log out and log back in to ensure all changes take effect
+          2. Test with: podman run --rm hello-world
+          3. Use 'podman ps' to see running containers
+          4. Use 'podman images' to see available images
+          
+          Note: Podman runs rootless by default, no daemon required!

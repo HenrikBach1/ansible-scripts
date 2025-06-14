@@ -21,6 +21,56 @@ This repository provides scripts for two types of development containers:
 - `start-yocto-container-docker.sh`: Standard Yocto container runner (Docker)
 - `start-yocto-container-podman.sh`: Yocto container runner using Podman (may work better on Ubuntu 24.04+)
 
+### Podman Scripts (Rootless Container Alternative)
+
+This repository now includes a complete set of Podman-based scripts that provide the same functionality as the Docker scripts but run rootless (no daemon required):
+
+#### Installation Scripts
+- `podman-install.yml`: Install and configure Podman (rootless by default)
+- `setup-podman-user.yml`: Configure Podman for the current user
+- `yocto-in-podman-install.yml`: Complete Yocto development environment setup with Podman
+- `ros2-in-podman-install.yml`: Complete ROS2 development environment setup with Podman
+
+#### Container Management Scripts
+- `start-yocto-container-podman.sh`: Create and manage Yocto containers with Podman
+- `restart-yocto-container-podman.sh`: Restart Yocto Podman containers
+- `restart-ros2-container-podman.sh`: Restart ROS2 Podman containers
+
+#### Connection Scripts
+- `yocto-podman-connect`: Connect to Yocto Podman containers
+- `ros2-podman-connect`: Connect to ROS2 Podman containers
+- `podman-exec-it`: Interactive Podman exec wrapper with container commands
+- `podman-exec-detached`: Detached Podman exec wrapper
+
+#### Container Command Installation
+- `ensure-yocto-container-commands-podman.sh`: Install container commands in Podman containers
+- `container-command-common.sh`: Now includes `install_container_commands_podman()` function
+
+#### Key Differences from Docker
+- **No root required**: Podman runs completely rootless
+- **No daemon**: Containers run directly as user processes
+- **Better security**: Rootless containers provide better isolation
+- **Systemd integration**: Can run containers as systemd user services
+- **Same commands**: Most Docker commands work with Podman (`podman run`, `podman ps`, etc.)
+
+#### Quick Start with Podman
+```bash
+# Install Podman
+ansible-playbook podman-install.yml
+
+# Set up Yocto development environment
+ansible-playbook yocto-in-podman-install.yml
+
+# Connect to Yocto container
+./yocto-podman-connect yocto-workspace-container
+
+# Or set up ROS2 development environment
+ansible-playbook ros2-in-podman-install.yml
+
+# Connect to ROS2 container
+./ros2-podman-connect ros2-workspace-container
+```
+
 ### Container Management Options
 - `--attach`: Connect to the container after starting it
 - `--stop`: Stop a running container
