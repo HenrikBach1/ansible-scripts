@@ -107,11 +107,6 @@ show_yocto_help() {
     echo ""
     echo "Note: CROPS/poky containers use the workdir permissions to set up the container user."
     echo "Make sure your workspace directory has the correct permissions."
-    echo ""
-    echo "Ubuntu 24.04+ Compatibility:"
-    echo "This script includes security options to handle Ubuntu 24.04+ user namespace restrictions"
-    echo "that can affect BitBake builds. If you encounter namespace errors, the container"
-    echo "automatically includes the necessary security configurations."
     exit 0
 }
 
@@ -561,10 +556,6 @@ GROUP_ID=$(id -g)
 docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     --privileged \
     --network=host \
-    --security-opt apparmor:unconfined \
-    --security-opt seccomp:unconfined \
-    --cap-add=SYS_ADMIN \
-    --cap-add=SYS_PTRACE \
     -v "$WORKSPACE_DIR:/workdir" \
     -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
