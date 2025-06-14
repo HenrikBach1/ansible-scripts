@@ -1,6 +1,6 @@
 #!/bin/bash
 # Common container runner script for development environments
-# This script is called by environment-specific scripts like start-ros2-container.sh and start-yocto-container.sh
+# This script is called by environment-specific scripts like start-ros2-container.sh and start-yocto-container-docker.sh
 file=run-container-common.sh
 
 # Source the configuration management system
@@ -37,7 +37,7 @@ _setup_container_completion() {
     if [[ $- == *i* ]] && command -v complete >/dev/null 2>&1; then
         # Main container management scripts
         complete -F _container_management_completion start-ros2-container.sh 2>/dev/null || true
-        complete -F _container_management_completion start-yocto-container.sh 2>/dev/null || true
+        complete -F _container_management_completion start-yocto-container-docker.sh 2>/dev/null || true
         complete -F _container_management_completion restart-ros2-container.sh 2>/dev/null || true
         complete -F _container_management_completion restart-yocto-container.sh 2>/dev/null || true
         complete -F _container_management_completion restart-vscode-container.sh 2>/dev/null || true
@@ -567,6 +567,6 @@ run_container() {
 # This script should not be called directly
 if [[ "$(basename "$0")" == "run-container-common.sh" ]]; then
     echo "Error: This script should not be called directly."
-    echo "Please use one of the environment-specific scripts like start-ros2-container.sh or start-yocto-container.sh."
+    echo "Please use one of the environment-specific scripts like start-ros2-container.sh or start-yocto-container-docker.sh."
     exit 1
 fi

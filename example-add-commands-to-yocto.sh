@@ -10,7 +10,7 @@
 # Check if container is running
 if ! docker ps -q --filter "name=yocto_container" | grep -q .; then
     echo "Starting yocto_container first..."
-    ./start-yocto-container.sh
+    ./start-yocto-container-docker.sh
     # Wait a moment for container to initialize
     sleep 3
 fi

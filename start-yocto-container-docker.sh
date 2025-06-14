@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to run a Yocto Docker container with appropriate settings
-file=start-yocto-container.sh
+file=start-yocto-container-docker.sh
 echo "Running script: $file"
 
 # Store original arguments
@@ -564,15 +564,6 @@ GROUP_ID=$(id -g)
 docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     --privileged \
     --network=host \
-    --security-opt apparmor:docker-yocto \
-    --security-opt seccomp:unconfined \
-    --cap-add=SYS_ADMIN \
-    --cap-add=SYS_PTRACE \
-    --cap-add=SYS_CHROOT \
-    --cap-add=SETUID \
-    --cap-add=SETGID \
-    --device /dev/fuse \
-    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -v "$WORKSPACE_DIR:/workdir" \
     -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
@@ -583,7 +574,7 @@ docker run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     "$IMAGE_NAME" \
     --workdir=/workdir \
     --id=$USER_ID:$GROUP_ID \
-    bash -c 'echo "Yocto Development Environment"; echo "-------------------------"; echo "This is a CROPS/poky build environment container for Yocto development."; echo "Installing essential development tools..."; apt-get update >/dev/null 2>&1 && apt-get install -y nano vim-tiny curl wget git >/dev/null 2>&1 && echo "✓ Development tools installed (nano, vim, curl, wget, git)" || echo "⚠ Some tools may need manual installation"; echo "Container is ready for development."; exec tail -f /dev/null'
+    bash -c 'echo "Yocto Development Environment"; echo "-------------------------"; echo "This is a CROPS/poky build environment container for Yocto development."; echo "Container is ready for development."; exec tail -f /dev/null'
 
 # Start the container watcher in the background if this is a persistent container
 if [ "$PERSISTENT" = true ] && [ -f "$(dirname "$0")/container-watch.sh" ]; then

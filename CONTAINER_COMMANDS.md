@@ -14,7 +14,7 @@ This document provides a comprehensive guide to working with our development con
 
 The container command system uses a modular architecture:
 
-1. **Container Creation**: `start-yocto-container.sh` / `start-ros2-container.sh`
+1. **Container Creation**: `start-yocto-container-docker.sh` / `start-ros2-container.sh`
 2. **Command Installation**: `ensure-yocto-container-commands.sh` / `ensure-ros2-container-commands.sh`
 3. **Shared Library**: `container-command-common.sh` (provides reusable functions)
 4. **Connection Scripts**: `yocto-connect` / `ros2-connect` (enhanced connection with proper environment)
@@ -32,7 +32,7 @@ The container command system uses a modular architecture:
 
 1. **Create container with proper tooling**:
    ```bash
-   ./start-yocto-container.sh --clean  # Clean slate
+   ./start-yocto-container-docker.sh --clean  # Clean slate
    ```
 
 2. **Commands are automatically installed** during container creation
@@ -64,10 +64,10 @@ The container command system uses a modular architecture:
 
 ```bash
 # 1. Create container with proper tooling
-./start-yocto-container.sh --clean
+./start-yocto-container-docker.sh --clean
 
 # Alternative: Restart existing container
-./start-yocto-container.sh --restart
+./start-yocto-container-docker.sh --restart
 
 # 2. Commands are automatically installed
 # (No manual setup needed)
@@ -91,7 +91,7 @@ The container command system uses a modular architecture:
 
 If you encounter issues:
 
-1. **Start with clean setup**: `./start-yocto-container.sh --clean`
+1. **Start with clean setup**: `./start-yocto-container-docker.sh --clean`
 2. **Verify with diagnostics**: `docker exec yocto_container sh -l -c "container-help"`
 3. **Check troubleshooting section** above for specific error patterns
 4. **Use proper connection scripts**: `./yocto-connect` for enhanced experience
@@ -169,24 +169,24 @@ container-help
 
 ## Container Management Options
 
-The `start-ros2-container.sh` and `start-yocto-container.sh` scripts provide direct options for container management:
+The `start-ros2-container.sh` and `start-yocto-container-docker.sh` scripts provide direct options for container management:
 
 ```bash
 # Stop a container
 ./start-ros2-container.sh --stop [CONTAINER_NAME]
-./start-yocto-container.sh --stop [CONTAINER_NAME]
+./start-yocto-container-docker.sh --stop [CONTAINER_NAME]
 
 # Restart a container (stops and recreates it)
 ./start-ros2-container.sh --restart [CONTAINER_NAME] 
-./start-yocto-container.sh --restart [CONTAINER_NAME]
+./start-yocto-container-docker.sh --restart [CONTAINER_NAME]
 
 # Remove a container (stops it first if running)
 ./start-ros2-container.sh --remove [CONTAINER_NAME]
-./start-yocto-container.sh --remove [CONTAINER_NAME]
+./start-yocto-container-docker.sh --remove [CONTAINER_NAME]
 
 # Verify container setup
 ./start-ros2-container.sh --verify [CONTAINER_NAME]
-./start-yocto-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 ```
 
 **Note**: The `--restart` option is equivalent to `--clean` - it stops and removes the existing container, then creates a new one with the current configuration. This ensures a completely fresh container setup.
@@ -197,7 +197,7 @@ If you have containers created with older scripts that are missing the `/project
 
 ```bash
 ./start-ros2-container.sh --restart [container_name]
-./start-yocto-container.sh --restart [container_name]
+./start-yocto-container-docker.sh --restart [container_name]
 ```
 
 This recreates the container with all proper volume mounts, including the `/projects` directory that VS Code requires for proper file access.
@@ -211,7 +211,7 @@ There are two recommended ways to connect to containers:
 1. **Starting a container with the `--attach` option**:
    ```bash
    ./start-ros2-container.sh --attach
-   ./start-yocto-container.sh --attach
+   ./start-yocto-container-docker.sh --attach
    ```
    This will start the container and automatically connect to it using the appropriate connect script.
 
@@ -238,7 +238,7 @@ There are two recommended ways to connect to containers:
 Container commands are available regardless of how you connect to the container:
 
 - Using `./ros2-connect` or `./yocto-connect` scripts
-- Using `./start-ros2-container.sh --attach` or `./start-yocto-container.sh --attach`
+- Using `./start-ros2-container.sh --attach` or `./start-yocto-container-docker.sh --attach`
 - Using VS Code's "Attach to Container" feature
 - Using direct `docker exec -it container_name bash` commands
 
@@ -246,7 +246,7 @@ Container commands are available regardless of how you connect to the container:
 
 The container command installation process follows this workflow:
 
-1. **Container Creation**: When you use `start-yocto-container.sh` or `start-ros2-container.sh`, the script automatically calls the appropriate command installation script
+1. **Container Creation**: When you use `start-yocto-container-docker.sh` or `start-ros2-container.sh`, the script automatically calls the appropriate command installation script
 2. **Command Installation**: The `ensure-yocto-container-commands.sh` (or similar) script installs commands in multiple locations:
    - `~/bin/` directory (e.g., `/home/usersetup/bin/`)
    - `/tmp/.container_commands/` directory (for backward compatibility)
@@ -292,7 +292,7 @@ If container commands are not available:
 1. **Check if container was created with proper tooling**:
    ```bash
    # Use the proper container creation script
-   ./start-yocto-container.sh --clean
+   ./start-yocto-container-docker.sh --clean
    ```
 
 2. **Ensure commands are installed**:
@@ -324,7 +324,7 @@ If container commands are not available:
 > **Note**: If you're using an older container that was created before this update, you might need to recreate it to have these commands available in all connection methods. Use the `--clean` option to ensure a fresh setup:
 >
 > ```bash
-> ./start-yocto-container.sh --clean
+> ./start-yocto-container-docker.sh --clean
 > ```
 
 ## Container Workspace Paths
@@ -354,7 +354,7 @@ By default, the Yocto container mounts the host's `$HOME/projects` directory to 
 To verify that container commands and workspace paths are properly configured, you can use the integrated verification feature:
 
 ```bash
-./start-yocto-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 # or
 ./start-ros2-container.sh --verify [CONTAINER_NAME]
 ```
@@ -604,7 +604,7 @@ If you're experiencing persistent issues with containers, use the built-in fix f
 
 ```bash
 ./start-ros2-container.sh --fix [container_name]
-./start-yocto-container.sh --fix [container_name]
+./start-yocto-container-docker.sh --fix [container_name]
 ```
 
 This will fix containers that keep exiting by adding keep-alive processes.
@@ -699,7 +699,7 @@ The bash completion supports:
 - Container management scripts (`add-commands-to-container.sh`)
 - Docker exec wrappers (`docker-exec-it`, `docker-exec-detached`)
 - Container connection scripts (`ros2-connect`, `yocto-connect`)
-- Container maintenance scripts (`restart-ros2-container.sh`, `restart-yocto-container.sh`, etc.)
+- Container maintenance scripts (`restart-ros2-container.sh`, `restart-yocto-container-docker.sh`, etc.)
 - In-container commands (`container-detach`, `container-stop`, etc.)
 
 ### Usage Examples
@@ -916,7 +916,7 @@ By default, the Yocto container mounts the host's `$HOME/projects` directory to 
 3. Restart the container with the correct configuration:
    ```bash
    docker stop CONTAINER_NAME
-   ./start-yocto-container.sh --name CONTAINER_NAME
+   ./start-yocto-container-docker.sh --name CONTAINER_NAME
    ```
 
 #### Notes on Workspace Paths
@@ -981,7 +981,7 @@ For ROS2 containers:
 
 For Yocto containers:
 ```bash
-./start-yocto-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 ```
 
 ### Quick Verification Tool
@@ -1028,7 +1028,7 @@ docker exec yocto_container bash -l -c "container-help"
 **Solution**:
 ```bash
 # Recreate container with proper tooling
-./start-yocto-container.sh --clean
+./start-yocto-container-docker.sh --clean
 
 # Verify VS Code compatibility
 docker exec yocto_container sh -l -c "container-help"
@@ -1063,7 +1063,7 @@ docker exec yocto_container sh -l -c "container-help"
 **Solution**:
 ```bash
 # Use proper container creation script
-./start-yocto-container.sh --name yocto_container
+./start-yocto-container-docker.sh --name yocto_container
 
 # Verify container is running
 docker ps | grep yocto
@@ -1079,7 +1079,7 @@ docker ps | grep yocto
 docker rm -f yocto_container
 
 # Create with current scripts
-./start-yocto-container.sh --clean
+./start-yocto-container-docker.sh --clean
 ```
 
 ### Advanced Troubleshooting
@@ -1123,8 +1123,8 @@ docker exec yocto_container sh -l -c "container-help"
 
 | Issue | Script to Use | Notes |
 |-------|---------------|--------|
-| Create new container | `./start-yocto-container.sh --clean` | Always use for fresh setup |
-| Restart existing container | `./start-yocto-container.sh --restart` | Convenient restart (same as --clean) |
+| Create new container | `./start-yocto-container-docker.sh --clean` | Always use for fresh setup |
+| Restart existing container | `./start-yocto-container-docker.sh --restart` | Convenient restart (same as --clean) |
 | Container exists but commands missing | `./ensure-yocto-container-commands.sh` | Install/update commands |
 | Connect to existing container | `./yocto-connect` | Enhanced environment |
 | VS Code connection issues | Recreate with `--clean` or `--restart` | VS Code works automatically after proper setup |
@@ -1157,7 +1157,7 @@ To verify container configurations, use the built-in verification commands:
 ./start-ros2-container.sh --verify [CONTAINER_NAME]
 
 # Verify Yocto containers  
-./start-yocto-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 
 # Or use the standalone verification tool
 ./verify-container.sh [CONTAINER_NAME]
@@ -1171,7 +1171,7 @@ To verify container configurations, use the built-in verification commands:
 
 - `fix-projects-path.sh` - **REMOVED**: Redundant with `start-*-container.sh --restart`
   - Functionality: Interactive container recreation for missing `/projects` mount
-  - Replacement: Use `./start-ros2-container.sh --restart` or `./start-yocto-container.sh --restart`
+  - Replacement: Use `./start-ros2-container.sh --restart` or `./start-yocto-container-docker.sh --restart`
   - Reason: Simple wrapper around functionality already available in main scripts
 
 - `fix-ros2-container.sh` - **REMOVED**: Redundant with `start-ros2-container.sh --fix`
@@ -1184,9 +1184,9 @@ To verify container configurations, use the built-in verification commands:
   - Replacement: Use `./start-ros2-container.sh --clean` or `./recreate-ros2-container.sh`
   - Reason: Duplicated container recreation functionality
 
-- `fix-yocto-container-volumes.sh` - **REMOVED**: Redundant with `start-yocto-container.sh --clean`
+- `fix-yocto-container-volumes.sh` - **REMOVED**: Redundant with `start-yocto-container-docker.sh --clean`
   - Functionality: Volume mount fixes for existing containers
-  - Replacement: Use `./start-yocto-container.sh --clean` or `--restart`
+  - Replacement: Use `./start-yocto-container-docker.sh --clean` or `--restart`
   - Reason: Duplicated functionality already handled by main container script
 
 - `yocto-container-bashrc.sh` - **REMOVED**: Never actually sourced and redundant
@@ -1220,7 +1220,7 @@ To verify container configurations, use the built-in verification commands:
 ### New Workflow:
 ```bash
 # 1. Start container (handles creation and basic setup)
-./start-yocto-container.sh
+./start-yocto-container-docker.sh
 
 # 2. Connect (automatically runs unified setup if needed)
 ./yocto-connect

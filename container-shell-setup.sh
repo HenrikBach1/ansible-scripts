@@ -6,9 +6,30 @@
 if [ ! -f /.dockerenv ] && [ ! -d /workdir ] && ! grep -q docker /proc/1/cgroup 2>/dev/null; then
     echo "ERROR: This script should only run inside Docker containers, not on the host!"
     echo "It appears you're running this on the host system."
-    echo "This script is automatically run by start-yocto-container.sh when creating containers."
+    echo "This script is automatically run by start-yocto-container-docker.sh when creating containers."
     exit 1
 fi
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+}
 
 # Detect environment
 RUNNING_AS_ROOT=false

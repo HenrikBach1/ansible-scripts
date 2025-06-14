@@ -33,7 +33,7 @@ The robust containers are specifically designed to work reliably with VS Code, p
    ```bash
    ./start-ros2-container.sh
    # or
-   ./start-yocto-container.sh
+   ./start-yocto-container-docker.sh
    ```
 
 2. In VS Code:
@@ -83,7 +83,7 @@ there are two recommended methods:
    ```bash
    # Start and immediately connect to a container
    ./start-ros2-container.sh --attach
-   ./start-yocto-container.sh --attach
+   ./start-yocto-container-docker.sh --attach
    ```
 
 2. **Connecting to an already running container**:
@@ -128,7 +128,7 @@ Use the restart option to stop, remove, and recreate your container with the cor
 
 ```bash
 ./start-ros2-container.sh --restart [container_name]
-./start-yocto-container.sh --restart [container_name]
+./start-yocto-container-docker.sh --restart [container_name]
 ```
 
 **What this does:**
@@ -143,7 +143,7 @@ If you prefer to do it step by step:
 
 1. Stop the container: `docker stop your_container_name`
 2. Remove the container: `docker rm your_container_name`
-3. Recreate it with the proper script: `./start-ros2-container.sh` or `./start-yocto-container.sh`
+3. Recreate it with the proper script: `./start-ros2-container.sh` or `./start-yocto-container-docker.sh`
 
 > **Note:** The only reliable way to add mounts to a container is to recreate it. Docker does not support adding bind mounts to running containers.
 ## Checking Container Mounts
@@ -168,7 +168,7 @@ The most common issue with VS Code Remote Development is a missing `/projects` d
 
 ```bash
 ./start-ros2-container.sh --restart [container_name]
-./start-yocto-container.sh --restart [container_name]
+./start-yocto-container-docker.sh --restart [container_name]
 ```
 
 This will recreate your container with all the necessary volume mounts including `/projects`.
@@ -194,7 +194,7 @@ If your container is exiting immediately after starting, you can use the --fix o
 ./start-ros2-container.sh --fix
 
 # For Yocto containers
-./start-yocto-container.sh --fix
+./start-yocto-container-docker.sh --fix
 
 # To fix a specific container
 ./start-ros2-container.sh --fix my_container_name
@@ -309,7 +309,7 @@ If you're having issues with VS Code attaching to containers, use the built-in f
 
 ```bash
 ./start-ros2-container.sh --fix [container_name]
-./start-yocto-container.sh --fix [container_name]
+./start-yocto-container-docker.sh --fix [container_name]
 ```
 
 This will fix containers that keep exiting and ensure they stay running.
@@ -339,7 +339,7 @@ If you continue to have issues after using the `--fix` option, you can:
 2. For missing `/projects` directory issues, recreate the container:
    ```bash
    ./start-ros2-container.sh --restart [container_name]
-   ./start-yocto-container.sh --restart [container_name]
+   ./start-yocto-container-docker.sh --restart [container_name]
    ```
 
 3. Check container status and logs:

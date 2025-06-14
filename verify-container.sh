@@ -49,7 +49,7 @@ fi
 if [[ "$CONTAINER_NAME" == *"ros2"* ]]; then
     ./start-ros2-container.sh --verify "$CONTAINER_NAME"
 elif [[ "$CONTAINER_NAME" == *"yocto"* ]]; then
-    ./start-yocto-container.sh --verify "$CONTAINER_NAME"
+    ./start-yocto-container-docker.sh --verify "$CONTAINER_NAME"
 else
     echo "Unknown container type. Using generic verification."
     source ./run-container-common.sh

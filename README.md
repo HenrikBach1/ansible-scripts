@@ -5,7 +5,7 @@ This repository contains Ansible scripts and supporting shell scripts for settin
 > **Quick Start Tips**: 
 > - If a container already exists, you can directly use `./ros2-connect` or `./yocto-connect` to connect to it
 > - These scripts will start the container if needed and provide all container commands
-> - To verify a container's setup is correct, use `./start-yocto-container.sh --verify` or `./start-ros2-container.sh --verify`
+> - To verify a container's setup is correct, use `./start-yocto-container-docker.sh --verify` or `./start-ros2-container.sh --verify`
 
 ## Container Types
 
@@ -18,7 +18,8 @@ This repository provides scripts for two types of development containers:
 
 ### Standard Scripts
 - `start-ros2-container.sh`: Standard ROS2 container runner
-- `start-yocto-container.sh`: Standard Yocto container runner
+- `start-yocto-container-docker.sh`: Standard Yocto container runner (Docker)
+- `start-yocto-container-podman.sh`: Yocto container runner using Podman (may work better on Ubuntu 24.04+)
 
 ### Container Management Options
 - `--attach`: Connect to the container after starting it
@@ -72,7 +73,7 @@ There are two ways to connect to containers:
    ```bash
    # Start a container and automatically connect to it
    ./start-ros2-container.sh --attach
-   ./start-yocto-container.sh --attach
+   ./start-yocto-container-docker.sh --attach
    ```
 
 2. **Connecting to an already running container**:
@@ -173,7 +174,7 @@ This ensures that ROS2 commands work without manual sourcing in most scenarios.
 
 ## Yocto Development Environment
 
-The `start-yocto-container.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools for embedded Linux development.
+The `start-yocto-container-docker.sh` script allows you to create and manage a Yocto Project Docker container with all the necessary tools for embedded Linux development.
 
 ### Yocto-Specific Features:
 
@@ -190,24 +191,24 @@ For Yocto/CROPS-specific container commands, see the [Special Considerations for
 
 ```bash
 # Basic usage (runs bash shell in the container)
-./start-yocto-container.sh
+./start-yocto-container-docker.sh
 
 # Create a container with a custom name
-./start-yocto-container.sh --name my_yocto_dev
+./start-yocto-container-docker.sh --name my_yocto_dev
 
 # Create a container with a custom workspace directory
-./start-yocto-container.sh --workspace ~/my_yocto_workspace
+./start-yocto-container-docker.sh --workspace ~/my_yocto_workspace
 
 # Stop a running container
-./start-yocto-container.sh --stop
+./start-yocto-container-docker.sh --stop
 
 # Stop and remove a container
-./start-yocto-container.sh --remove
+./start-yocto-container-docker.sh --remove
 ```
 
 For detailed usage and all available options, run:
 ```bash
-./start-yocto-container.sh --help
+./start-yocto-container-docker.sh --help
 ```
 
 ### Yocto Quick Start:
@@ -241,29 +242,6 @@ git clone -b scarthgap git://git.yoctoproject.org/poky
 git clone -b kirkstone git://git.yoctoproject.org/poky
 ```
 
-## Troubleshooting
-
-### BitBake User Namespace Errors (Ubuntu 24.04+)
-
-If you encounter errors like:
-```
-ERROR: User namespaces are not usable by BitBake, possibly due to AppArmor.
-```
-
-This is due to Ubuntu 24.04+ security restrictions on unprivileged user namespaces. The Yocto container script automatically includes the necessary security options to resolve this issue:
-
-- `--security-opt apparmor:unconfined`
-- `--security-opt seccomp:unconfined` 
-- `--cap-add=SYS_ADMIN`
-- `--cap-add=SYS_PTRACE`
-
-If you're still experiencing issues, try recreating your container:
-```bash
-./start-yocto-container.sh --restart
-```
-
-For more information, see the [Ubuntu 24.04 release notes](https://discourse.ubuntu.com/t/ubuntu-24-04-lts-noble-numbat-release-notes/39890#unprivileged-user-namespace-restrictions).
-
 ## Configuration Persistence
 
 The scripts now support saving and reusing container configurations. This feature allows you to define your preferred settings once and reuse them in future sessions.
@@ -277,7 +255,7 @@ To save your current container configuration:
 ./start-ros2-container.sh --name my_ros2_dev --workspace ~/my_ros2_projects --gpu --save-config
 
 # Save Yocto container configuration
-./start-yocto-container.sh --name my_yocto_dev --workspace ~/my_yocto_projects --save-config
+./start-yocto-container-docker.sh --name my_yocto_dev --workspace ~/my_yocto_projects --save-config
 ```
 
 ### Reusing Configurations
@@ -289,7 +267,7 @@ Once saved, you can reuse your configuration by simply specifying the container 
 ./start-ros2-container.sh --name my_ros2_dev
 
 # Use saved Yocto configuration
-./start-yocto-container.sh --name my_yocto_dev
+./start-yocto-container-docker.sh --name my_yocto_dev
 ```
 
 ### Listing Saved Configurations
@@ -299,7 +277,7 @@ To view all saved configurations:
 ```bash
 ./start-ros2-container.sh --list-configs
 # or
-./start-yocto-container.sh --list-configs
+./start-yocto-container-docker.sh --list-configs
 ```
 
 ### Reproducing Containers with Original Arguments
@@ -438,7 +416,7 @@ If you encounter issues with workspace paths (especially in Yocto containers):
 2. Restart the container with the correct configuration:
    ```bash
    docker stop CONTAINER_NAME
-   ./start-yocto-container.sh --name CONTAINER_NAME
+   ./start-yocto-container-docker.sh --name CONTAINER_NAME
    ```
 
 ### Container Verification
@@ -448,7 +426,7 @@ To verify container configurations, use the built-in verification commands:
 ```bash
 # Verify specific containers
 ./start-ros2-container.sh --verify [CONTAINER_NAME]
-./start-yocto-container.sh --verify [CONTAINER_NAME]
+./start-yocto-container-docker.sh --verify [CONTAINER_NAME]
 
 # Or use the dedicated verification tool
 ./verify-container.sh [CONTAINER_NAME]
