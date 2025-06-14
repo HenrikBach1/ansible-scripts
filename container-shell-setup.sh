@@ -29,8 +29,6 @@ log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-}
-
 # Detect environment
 RUNNING_AS_ROOT=false
 if [ "$(id -u)" -eq 0 ]; then

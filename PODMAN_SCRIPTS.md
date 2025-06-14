@@ -96,6 +96,30 @@ Specialized script for installing container commands in Podman containers.
 - Handles Podman-specific container access
 - Ensures container commands are available
 
+### `setup-vscode-podman.sh`
+Configures VS Code to work with Podman containers for Remote-Containers extension.
+- Starts and enables Podman socket service
+- Sets up DOCKER_HOST environment variable for Docker compatibility
+- Configures VS Code settings.json for Podman integration
+- Provides instructions for VS Code Remote-Containers usage
+
+**Usage:**
+```bash
+./setup-vscode-podman.sh
+```
+
+**What it does:**
+- Enables `podman.socket` systemd service for Docker API compatibility
+- Adds `DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock` to ~/.bashrc
+- Updates VS Code settings to use Podman socket
+- Configures `dev.containers.dockerPath` to use `podman`
+
+**After running this script:**
+1. Restart VS Code
+2. Install "Dev Containers" extension if not already installed
+3. Use `Ctrl+Shift+P` → "Dev Containers: Attach to Running Container..."
+4. Select your Podman container from the list
+
 ## Shared Libraries
 
 ### Updates to `container-command-common.sh`

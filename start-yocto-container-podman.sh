@@ -307,7 +307,7 @@ fi
 # Create a startup script for the container
 cat > /tmp/yocto-container-startup.sh << 'EOF'
 #!/bin/bash
-cd /workdir || cd /
+
 echo "Yocto Development Environment (Podman)"
 echo "------------------------------------"
 echo ""
@@ -323,7 +323,8 @@ echo "3. Build: bitbake core-image-minimal"
 echo ""
 echo "Container is now running with Podman and ready for development."
 echo ""
-# Keep the container running with a simple approach
+
+# Keep container alive - CROPS containers expect this pattern
 exec tail -f /dev/null
 EOF
 
@@ -331,11 +332,13 @@ EOF
 USER_ID=$(id -u)
 GROUP_ID=$(id -g)
 
-# Set user options
+# Set user options for CROPS compatibility
 if [ "$RUN_AS_ROOT" = true ]; then
     USER_OPTIONS="--user root"
 else
-    USER_OPTIONS="--user $USER_ID:$GROUP_ID --userns=keep-id"
+    # For CROPS containers with Podman, we need to map the host user properly
+    # Use --userns=keep-id to preserve the user mapping, but also set the container user
+    USER_OPTIONS="--userns=keep-id --user $USER_ID:$GROUP_ID"
 fi
 
 # Run the container with Podman-specific parameters
@@ -350,18 +353,17 @@ podman run $DETACH_FLAG $PERSISTENCE_FLAG $GPU_OPTIONS \
     $USER_OPTIONS \
     --workdir /workdir \
     --security-opt label=disable \
-    --cap-add SYS_ADMIN \
-    --tmpfs /tmp \
-    --tmpfs /var/tmp \
+    --entrypoint="" \
     -v "$WORKSPACE_DIR:/workdir" \
     -v "$WORKSPACE_DIR:/workspace" \
     -v "$WORKSPACE_DIR:/projects" \
-    -v /tmp/yocto-container-startup.sh:/container-startup.sh \
     -e "TEMPLATECONF=" \
     -e "OE_TERMINAL=screen" \
-    --privileged \
+    -e "USER=$USER" \
+    -e "USERID=$USER_ID" \
+    -e "GROUPID=$GROUP_ID" \
     "$IMAGE_NAME" \
-    bash /container-startup.sh
+    bash -c 'exec tail -f /dev/null'
 
 if [ $? -eq 0 ]; then
     log_success "Container $CONTAINER_NAME started successfully with Podman"
@@ -373,6 +375,27 @@ if [ $? -eq 0 ]; then
         podman cp "$SCRIPT_DIR/container-shell-setup.sh" "$CONTAINER_NAME:/tmp/"
         podman exec "$CONTAINER_NAME" bash -c 'chmod +x /tmp/container-shell-setup.sh && /tmp/container-shell-setup.sh' || true
     fi
+    
+    # Setup VS Code integration for Podman
+    log_info "Setting up VS Code integration..."
+    
+    # Ensure Podman socket is running for VS Code Remote-Containers
+    systemctl --user is-active --quiet podman.socket || {
+        log_info "Starting Podman socket for VS Code integration..."
+        systemctl --user start podman.socket
+        systemctl --user enable podman.socket >/dev/null 2>&1 || true
+    }
+    
+    # Set up environment variable for Docker compatibility
+    PODMAN_SOCKET_PATH="unix:///run/user/$(id -u)/podman/podman.sock"
+    if ! grep -q "DOCKER_HOST.*podman.sock" ~/.bashrc 2>/dev/null; then
+        echo "# Podman Docker compatibility for VS Code" >> ~/.bashrc
+        echo "export DOCKER_HOST=\"$PODMAN_SOCKET_PATH\"" >> ~/.bashrc
+        log_info "Added DOCKER_HOST environment variable to ~/.bashrc"
+    fi
+    
+    # Export for current session
+    export DOCKER_HOST="$PODMAN_SOCKET_PATH"
     
     # If auto-attach is enabled, connect to the container
     if [ "$AUTO_ATTACH" = true ]; then

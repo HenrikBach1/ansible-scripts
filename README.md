@@ -156,6 +156,29 @@ For detailed information on connecting to containers using VS Code, see [VSCODE_
 
 By default, all containers are set up to be discoverable by VS Code's Remote - Containers extension.
 
+### VS Code Integration with Podman
+
+For VS Code Remote-Containers support with Podman:
+
+```bash
+# Set up VS Code to work with Podman containers
+./setup-vscode-podman.sh
+
+# Start your container
+./start-yocto-container-podman.sh
+
+# Then in VS Code:
+# 1. Ctrl+Shift+P
+# 2. "Dev Containers: Attach to Running Container..."
+# 3. Select your Podman container
+```
+
+This configures:
+- Podman socket service for Docker API compatibility
+- Environment variables (`DOCKER_HOST`)
+- VS Code settings for Podman integration
+- Complete Remote-Containers workflow
+
 ## Command Completions
 
 Tab completion for container commands is automatically enabled when you use the container scripts. The completion functionality is built into the main scripts and provides:
